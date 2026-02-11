@@ -1,8 +1,22 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useChips } from "@/context/ChipContext";
-import { motion, useAnimate } from "framer-motion";
+import dynamic from "next/dynamic";
+import type { RouletteWheel3DHandle } from "./RouletteWheel3D";
+
+// Dynamic import — Three.js must only run client-side
+const RouletteWheel3D = dynamic(() => import("./RouletteWheel3D"), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="flex items-center justify-center rounded-full"
+      style={{ width: 380, height: 380, background: "radial-gradient(circle, #0f0f18, #050508)" }}
+    >
+      <div className="text-gray-500 text-sm animate-pulse">Loading wheel...</div>
+    </div>
+  ),
+});
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -13,11 +27,6 @@ const BLACK_NUMBERS = new Set([2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35
 
 const CHIP_VALUES = [100, 500, 1000, 5000] as const;
 type ChipValue = (typeof CHIP_VALUES)[number];
-
-// Standard European roulette wheel order (clockwise from 0)
-const WHEEL_ORDER = [0,26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32];
-const NUM_POCKETS = 37;
-const SECTOR_ANGLE = 360 / NUM_POCKETS;
 
 // The three columns on a standard roulette layout
 const COLUMN_1 = [1,4,7,10,13,16,19,22,25,28,31,34];
@@ -129,101 +138,6 @@ function historyBg(n: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Wheel rendering helpers
-// ---------------------------------------------------------------------------
-
-function getWheelColor(n: number): string {
-  const c = getNumberColor(n);
-  if (c === "green") return "#0d7a36";
-  if (c === "red") return "#b91c1c";
-  return "#18182b";
-}
-
-function buildConicGradient(): string {
-  const stops: string[] = [];
-  WHEEL_ORDER.forEach((num, i) => {
-    const color = getWheelColor(num);
-    const startDeg = i * SECTOR_ANGLE;
-    const endDeg = (i + 1) * SECTOR_ANGLE;
-    stops.push(`${color} ${startDeg.toFixed(4)}deg ${endDeg.toFixed(4)}deg`);
-  });
-  return `conic-gradient(from 0deg, ${stops.join(", ")})`;
-}
-
-function buildFretGradient(): string {
-  // Thin gold lines at each sector boundary
-  const stops: string[] = [];
-  for (let i = 0; i < NUM_POCKETS; i++) {
-    const deg = i * SECTOR_ANGLE;
-    const b = deg - 0.4;
-    const a = deg + 0.4;
-    if (i > 0) stops.push(`transparent ${b.toFixed(4)}deg`);
-    stops.push(`rgba(184,150,12,0.7) ${(deg - 0.15).toFixed(4)}deg`);
-    stops.push(`rgba(240,208,96,0.9) ${deg.toFixed(4)}deg`);
-    stops.push(`rgba(184,150,12,0.7) ${(deg + 0.15).toFixed(4)}deg`);
-    stops.push(`transparent ${a.toFixed(4)}deg`);
-  }
-  return `conic-gradient(from 0deg, transparent 0deg, ${stops.join(", ")}, transparent 360deg)`;
-}
-
-function getWinningAngle(winningNumber: number): number {
-  const index = WHEEL_ORDER.indexOf(winningNumber);
-  return index * SECTOR_ANGLE + SECTOR_ANGLE / 2;
-}
-
-// ---------------------------------------------------------------------------
-// Ball animation (requestAnimationFrame for 60fps, DOM ref for performance)
-// ---------------------------------------------------------------------------
-
-function animateBall(
-  duration: number,
-  totalBallRotation: number,
-  outerRadius: number,
-  innerRadius: number,
-  ballEl: HTMLDivElement,
-  onComplete: () => void
-) {
-  const startTime = performance.now();
-
-  function frame(now: number) {
-    const elapsed = now - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-
-    // Ease-out: fast start, slow end
-    const eased = 1 - Math.pow(1 - progress, 3.5);
-
-    const currentAngle = totalBallRotation * eased;
-
-    // Spiral inward during last 65%
-    let currentRadius = outerRadius;
-    const spiralStart = 0.35;
-    if (progress > spiralStart) {
-      const spiralProgress = (progress - spiralStart) / (1 - spiralStart);
-      const spiralEased = spiralProgress * spiralProgress;
-      currentRadius = outerRadius - (outerRadius - innerRadius) * spiralEased;
-    }
-
-    // Small bounce in the last 8%
-    if (progress > 0.92) {
-      const bp = (progress - 0.92) / 0.08;
-      const bounce = Math.sin(bp * Math.PI * 4) * 3.5 * (1 - bp);
-      currentRadius += bounce;
-    }
-
-    ballEl.style.transform = `rotate(${currentAngle}deg) translateY(-${currentRadius}px)`;
-
-    if (progress < 1) {
-      requestAnimationFrame(frame);
-    } else {
-      ballEl.style.transform = `rotate(${totalBallRotation}deg) translateY(-${innerRadius}px)`;
-      onComplete();
-    }
-  }
-
-  requestAnimationFrame(frame);
-}
-
-// ---------------------------------------------------------------------------
 // Chip badge
 // ---------------------------------------------------------------------------
 
@@ -232,179 +146,6 @@ function ChipBadge({ amount }: { amount: number }) {
     <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-[var(--gold)] text-[10px] font-bold text-black px-1 shadow-md z-10 pointer-events-none">
       {amount >= 1000 ? `${amount / 1000}k` : amount}
     </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Roulette Wheel Component — realistic physical design
-// ---------------------------------------------------------------------------
-
-const WHEEL_SIZE = 320;
-const FRAME_PAD = 16;
-const TRACK_PAD = 8;
-const FRET_PAD = 4;
-const TOTAL_SIZE = WHEEL_SIZE + (FRAME_PAD + TRACK_PAD + FRET_PAD) * 2;
-
-// Radii for ball orbit
-const BALL_TRACK_RADIUS = WHEEL_SIZE / 2 + FRET_PAD + TRACK_PAD / 2;
-const BALL_POCKET_RADIUS = WHEEL_SIZE / 2 - 24;
-
-// 8 diamond deflectors evenly spaced
-const DEFLECTOR_POSITIONS = Array.from({ length: 8 }, (_, i) => i * 45);
-
-function RouletteWheel({
-  wheelScope,
-  ballRef,
-  result,
-  spinning,
-}: {
-  wheelScope: React.RefObject<HTMLDivElement | null>;
-  ballRef: React.RefObject<HTMLDivElement | null>;
-  result: number | null;
-  spinning: boolean;
-}) {
-  const conicGradient = useMemo(() => buildConicGradient(), []);
-  const fretGradient = useMemo(() => buildFretGradient(), []);
-
-  const numberRadius = WHEEL_SIZE / 2 - 36;
-  const centerSize = WHEEL_SIZE * 0.3;
-
-  return (
-    <div
-      className="relative flex items-center justify-center"
-      style={{ width: TOTAL_SIZE, height: TOTAL_SIZE }}
-    >
-      {/* Gold pointer at top */}
-      <div className="roulette-marker" />
-
-      {/* Mahogany frame */}
-      <div
-        className={`roulette-frame ${result !== null && !spinning ? "roulette-win-glow" : ""}`}
-        style={{ width: TOTAL_SIZE, height: TOTAL_SIZE }}
-      >
-        {/* Ball track (metallic groove) */}
-        <div
-          className="roulette-ball-track"
-          style={{
-            width: TOTAL_SIZE - FRAME_PAD * 2,
-            height: TOTAL_SIZE - FRAME_PAD * 2,
-            position: "relative",
-          }}
-        >
-          {/* Diamond deflectors on the ball track */}
-          {DEFLECTOR_POSITIONS.map((angle) => {
-            const r = (TOTAL_SIZE - FRAME_PAD * 2) / 2 - 3;
-            const rad = (angle - 90) * (Math.PI / 180);
-            const cx = (TOTAL_SIZE - FRAME_PAD * 2) / 2;
-            return (
-              <div
-                key={angle}
-                className="roulette-deflector"
-                style={{
-                  left: cx + r * Math.cos(rad) - 5,
-                  top: cx + r * Math.sin(rad) - 5,
-                }}
-              />
-            );
-          })}
-
-          {/* Gold fret ring */}
-          <div
-            className="roulette-fret-ring"
-            style={{
-              width: TOTAL_SIZE - (FRAME_PAD + TRACK_PAD) * 2,
-              height: TOTAL_SIZE - (FRAME_PAD + TRACK_PAD) * 2,
-            }}
-          >
-            {/* Spinning wheel */}
-            <motion.div
-              ref={wheelScope}
-              className="roulette-wheel"
-              style={{ width: WHEEL_SIZE, height: WHEEL_SIZE }}
-            >
-              {/* Colored pockets */}
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{ background: conicGradient }}
-              />
-
-              {/* Fret dividers */}
-              <div
-                className="roulette-dividers"
-                style={{ background: fretGradient }}
-              />
-
-              {/* Pocket depth shadow — inner ring */}
-              <div
-                className="roulette-pocket-shadow"
-                style={{
-                  top: 20,
-                  left: 20,
-                  right: 20,
-                  bottom: 20,
-                  background: "transparent",
-                }}
-              />
-
-              {/* Number labels */}
-              {WHEEL_ORDER.map((num, i) => {
-                const angle = i * SECTOR_ANGLE + SECTOR_ANGLE / 2;
-                return (
-                  <span
-                    key={num}
-                    className="roulette-number"
-                    style={{
-                      width: 22,
-                      height: 22,
-                      marginTop: -11,
-                      marginLeft: -11,
-                      transform: `rotate(${angle}deg) translateY(-${numberRadius}px) rotate(-${angle}deg)`,
-                    }}
-                  >
-                    {num}
-                  </span>
-                );
-              })}
-
-              {/* Center cone — gold brass hub */}
-              <div
-                className="roulette-center"
-                style={{ width: centerSize, height: centerSize }}
-              >
-                <div
-                  className="roulette-center-outer"
-                  style={{ width: centerSize - 4, height: centerSize - 4 }}
-                >
-                  <div
-                    className="roulette-center-inner"
-                    style={{ width: centerSize - 10, height: centerSize - 10 }}
-                  >
-                    <span className="text-[#1a0e00] font-black text-[9px] tracking-widest select-none drop-shadow-[0_1px_0_rgba(255,255,255,0.3)]">
-                      CASINO X
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 3D lighting overlay */}
-              <div className="roulette-light-overlay" />
-            </motion.div>
-          </div>
-
-          {/* Ball — lives in ball-track layer, NOT inside the spinning wheel */}
-          <div
-            ref={ballRef}
-            className={`roulette-ball ${spinning ? "roulette-ball-spinning" : ""}`}
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: `rotate(0deg) translateY(-${BALL_TRACK_RADIUS}px)`,
-            }}
-          />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -423,9 +164,7 @@ export default function RoulettePage() {
   const [message, setMessage] = useState<string>("");
   const [lastWin, setLastWin] = useState<number>(0);
 
-  const [wheelScope, wheelAnimate] = useAnimate<HTMLDivElement>();
-  const ballRef = useRef<HTMLDivElement>(null);
-  const cumulativeRotationRef = useRef(0);
+  const wheelRef = useRef<RouletteWheel3DHandle>(null);
 
   // -------------------------------------------------------------------------
   // Bet placement
@@ -471,7 +210,7 @@ export default function RoulettePage() {
   // Spin
   // -------------------------------------------------------------------------
 
-  const spin = useCallback(() => {
+  const spin = useCallback(async () => {
     if (spinning) return;
     if (bets.size === 0) {
       setMessage("Place at least one bet!");
@@ -486,67 +225,37 @@ export default function RoulettePage() {
     const winningNumber = Math.floor(Math.random() * 37);
     const spinDuration = 4500 + Math.random() * 1500; // 4.5-6 seconds
 
-    const winAngle = getWinningAngle(winningNumber);
-
-    // Wheel rotates negative (clockwise visually when CSS rotation is negative)
-    const wheelExtraRotations = 360 * (3 + Math.floor(Math.random() * 3));
-    const targetWheelRotation = cumulativeRotationRef.current - (wheelExtraRotations + winAngle);
-
-    // Ball does 5-8 full orbits, ends at 0° (top = marker position)
-    const ballOrbits = 5 + Math.floor(Math.random() * 4);
-    const totalBallRotation = 360 * ballOrbits;
-
-    // Reset ball to outer track
-    if (ballRef.current) {
-      ballRef.current.style.transform = `rotate(0deg) translateY(-${BALL_TRACK_RADIUS}px)`;
+    // Trigger Three.js wheel spin
+    if (wheelRef.current) {
+      await wheelRef.current.spin(winningNumber, spinDuration);
+    } else {
+      // Fallback: just wait if wheel hasn't loaded
+      await new Promise((r) => setTimeout(r, spinDuration));
     }
 
-    // Animate wheel
-    wheelAnimate(
-      wheelScope.current!,
-      { rotate: targetWheelRotation },
-      {
-        duration: spinDuration / 1000,
-        ease: [0.12, 0.8, 0.2, 1],
+    // Calculate winnings
+    setResult(winningNumber);
+
+    let totalWinnings = 0;
+    bets.forEach((bet) => {
+      if (doesBetWin(bet.type, winningNumber)) {
+        const payout = getPayout(bet.type);
+        totalWinnings += bet.amount + bet.amount * payout;
       }
-    );
+    });
 
-    // Animate ball
-    if (ballRef.current) {
-      animateBall(
-        spinDuration,
-        totalBallRotation,
-        BALL_TRACK_RADIUS,
-        BALL_POCKET_RADIUS,
-        ballRef.current,
-        () => {
-          cumulativeRotationRef.current = targetWheelRotation;
-          setResult(winningNumber);
-
-          // Calculate winnings
-          let totalWinnings = 0;
-          bets.forEach((bet) => {
-            if (doesBetWin(bet.type, winningNumber)) {
-              const payout = getPayout(bet.type);
-              totalWinnings += bet.amount + bet.amount * payout;
-            }
-          });
-
-          if (totalWinnings > 0) {
-            addChips(totalWinnings);
-            setLastWin(totalWinnings);
-            setMessage(`Winner! +${totalWinnings.toLocaleString()} chips`);
-          } else {
-            setMessage(`No luck. The ball landed on ${winningNumber}.`);
-          }
-
-          setHistory((prev) => [winningNumber, ...prev].slice(0, 10));
-          setBets(new Map());
-          setSpinning(false);
-        }
-      );
+    if (totalWinnings > 0) {
+      addChips(totalWinnings);
+      setLastWin(totalWinnings);
+      setMessage(`Winner! +${totalWinnings.toLocaleString()} chips`);
+    } else {
+      setMessage(`No luck. The ball landed on ${winningNumber}.`);
     }
-  }, [spinning, bets, addChips, wheelAnimate, wheelScope]);
+
+    setHistory((prev) => [winningNumber, ...prev].slice(0, 10));
+    setBets(new Map());
+    setSpinning(false);
+  }, [spinning, bets, addChips]);
 
   // -------------------------------------------------------------------------
   // Bet amount helper
@@ -580,12 +289,17 @@ export default function RoulettePage() {
 
       {/* Wheel Section */}
       <div className="max-w-6xl mx-auto px-4 mb-6">
-        <div className="rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 40%, rgba(15,15,24,0.95), rgba(5,5,8,0.98))" }}>
-          {/* The Wheel */}
-          <div className="mb-4 scale-[0.78] sm:scale-[0.85] md:scale-100 origin-center">
-            <RouletteWheel
-              wheelScope={wheelScope}
-              ballRef={ballRef}
+        <div
+          className="rounded-2xl p-4 md:p-8 flex flex-col items-center justify-center"
+          style={{
+            background: "radial-gradient(ellipse at 50% 40%, rgba(15,15,24,0.95), rgba(5,5,8,0.98))",
+          }}
+        >
+          {/* The 3D Wheel */}
+          <div className="mb-4 scale-[0.78] sm:scale-[0.88] md:scale-100 origin-center">
+            <RouletteWheel3D
+              ref={wheelRef}
+              size={400}
               result={result}
               spinning={spinning}
             />
