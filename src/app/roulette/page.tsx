@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useChips } from "@/context/ChipContext";
+import { useSound } from "@/hooks/useSound";
 import dynamic from "next/dynamic";
 
 // Dynamic import for react-casino-roulette (client only)
@@ -159,6 +160,7 @@ function ChipBadge({ amount }: { amount: number }) {
 
 export default function RoulettePage() {
   const { chips, addChips, removeChips } = useChips();
+  const { play } = useSound();
 
   const [selectedChip, setSelectedChip] = useState<ChipValue>(100);
   const [bets, setBets] = useState<Map<string, Bet>>(new Map());
@@ -201,6 +203,7 @@ export default function RoulettePage() {
       return next;
     });
     setMessage("");
+    play("bet");
   }, [spinning, bets, selectedChip, removeChips]);
 
   const clearBets = useCallback(() => {
@@ -228,6 +231,7 @@ export default function RoulettePage() {
     setMessage("");
     setResult(null);
     setLastWin(0);
+    play("spin");
 
     const winningNumber = Math.floor(Math.random() * 37);
     setPendingWinningNumber(winningNumber);
@@ -255,8 +259,10 @@ export default function RoulettePage() {
       addChips(totalWinnings);
       setLastWin(totalWinnings);
       setMessage(`Winner! +${totalWinnings.toLocaleString()} chips`);
+      play(totalWinnings >= 10000 ? "bigWin" : "win");
     } else {
       setMessage(`No luck. The ball landed on ${winningNumber}.`);
+      play("lose");
     }
 
     setHistory((prev) => [winningNumber, ...prev].slice(0, 10));

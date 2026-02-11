@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useChips } from "@/context/ChipContext";
+import { useSound } from "@/hooks/useSound";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -158,6 +159,7 @@ function CrashGraph({
 
 export default function CrashPage() {
   const { chips, addChips, removeChips } = useChips();
+  const { play } = useSound();
 
   const [selectedChip, setSelectedChip] = useState<ChipValue>(100);
   const [phase, setPhase] = useState<GamePhase>("betting");
@@ -215,6 +217,7 @@ export default function CrashPage() {
       cancelAnimationFrame(animFrameRef.current);
       setMultiplier(crashPointRef.current);
       setPhase("crashed");
+      play("crash");
 
       if (!cashedOutRef.current) {
         setMessage(`Crashed at ${crashPointRef.current.toFixed(2)}x! You lost ${currentBet.toLocaleString()} chips.`);
@@ -250,7 +253,7 @@ export default function CrashPage() {
     }
 
     animFrameRef.current = requestAnimationFrame(gameLoop);
-  }, [currentBet, addChips, cashOutAt]);
+  }, [currentBet, addChips, cashOutAt, play]);
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -266,6 +269,7 @@ export default function CrashPage() {
     setCurrentBet(selectedChip);
     setBetPlaced(true);
     setMessage("");
+    play("bet");
   }, [phase, betPlaced, selectedChip, removeChips]);
 
   const startRound = useCallback(() => {
@@ -295,6 +299,7 @@ export default function CrashPage() {
     setMessage(
       `Cashed out at ${multiplier.toFixed(2)}x! +${payout.toLocaleString()} chips`
     );
+    play("cashout");
   }, [phase, cashedOut, multiplier, currentBet, addChips]);
 
   // Cleanup on unmount

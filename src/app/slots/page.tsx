@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useChips } from "@/context/ChipContext";
+import { useSound } from "@/hooks/useSound";
 
 const SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "🔔", "💎", "7️⃣", "⭐"] as const;
 type Symbol = (typeof SYMBOLS)[number];
@@ -77,6 +78,7 @@ const SPIN_STRIPS: Symbol[][] = Array.from({ length: 3 }, () => {
 
 export default function SlotsPage() {
   const { chips, addChips, removeChips } = useChips();
+  const { play } = useSound();
 
   const [bet, setBet] = useState<number>(100);
   const [reels, setReels] = useState<[Symbol, Symbol, Symbol]>(["🍒", "💎", "7️⃣"]);
@@ -130,6 +132,7 @@ export default function SlotsPage() {
     setWinAnimation(false);
     setJackpotCelebration(false);
     setReelsStopped([false, false, false]);
+    play("spin");
 
     const finalReels: [Symbol, Symbol, Symbol] = [
       getRandomSymbol(),
@@ -199,6 +202,7 @@ export default function SlotsPage() {
                 const label = getResultLabel(finalReels, multiplier);
                 setMessage(`${label} +${payout.toLocaleString()} chips!`);
                 setWinAnimation(true);
+                play(multiplier >= 15 ? "bigWin" : "win");
 
                 if (multiplier >= 15) {
                   setJackpotCelebration(true);
@@ -207,6 +211,7 @@ export default function SlotsPage() {
                 setTimeout(() => setWinAnimation(false), 2500);
               } else {
                 setMessage("No match. Try again!");
+                play("lose");
               }
 
               const result: SpinResult = {

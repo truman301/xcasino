@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useChips } from "@/context/ChipContext";
+import { useSound } from "@/hooks/useSound";
 import {
   Card,
   Rank,
@@ -424,6 +425,7 @@ function isBettingRoundComplete(players: Player[], highBet: number): boolean {
 
 export default function PokerPage() {
   const { chips, addChips, removeChips, username } = useChips();
+  const { play } = useSound();
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [communityCards, setCommunityCards] = useState<Card[]>([]);
@@ -557,6 +559,9 @@ export default function PokerPage() {
 
       if (winnerPlayerId === 0) {
         addChips(totalPot);
+        play(totalPot >= 1000 ? "bigWin" : "win");
+      } else {
+        play("lose");
       }
 
       setPlayers(updatedPlayers);
@@ -908,6 +913,7 @@ export default function PokerPage() {
     newPlayers[newDealerIdx].isDealer = true;
 
     // Shuffle and deal
+    play("deal");
     let currentDeck = shuffleDeck(createDeck());
     for (let round = 0; round < 2; round++) {
       for (let i = 0; i < NUM_PLAYERS; i++) {
@@ -978,6 +984,8 @@ export default function PokerPage() {
         return;
 
       setIsProcessing(true);
+      if (action === "raise" || action === "all-in") play("bet");
+      else if (action === "call") play("click");
 
       executeAction(
         0,
@@ -1001,6 +1009,7 @@ export default function PokerPage() {
       highestBet,
       minRaise,
       deck,
+      play,
       communityCards,
       executeAction,
     ]

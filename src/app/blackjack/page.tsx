@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useChips } from "@/context/ChipContext";
+import { useSound } from "@/hooks/useSound";
 import { Card, createDeck, shuffleDeck, dealCard } from "@/lib/cards";
 import PlayingCard from "@/components/PlayingCard";
 import Link from "next/link";
@@ -167,6 +168,7 @@ function createShoe(): Card[] {
 
 export default function BlackjackPage() {
   const { chips, addChips, removeChips } = useChips();
+  const { play } = useSound();
 
   const [shoe, setShoe] = useState<Card[]>(() => createShoe());
   const [phase, setPhase] = useState<GamePhase>("betting");
@@ -242,8 +244,10 @@ export default function BlackjackPage() {
 
     if (totalWin > 0) {
       setMessage(`You win ${totalWin.toLocaleString()} chips!`);
+      play(totalWin >= 5000 ? "bigWin" : "win");
     } else if (totalWin < 0) {
       setMessage(`You lose ${Math.abs(totalWin).toLocaleString()} chips.`);
+      play("lose");
     } else {
       setMessage("Push! Bet returned.");
     }
@@ -316,6 +320,7 @@ export default function BlackjackPage() {
     setLastBet(amount);
     setMessage("");
     setPhase("dealing");
+    play("deal");
 
     let curShoe = getShoe();
 
@@ -388,6 +393,7 @@ export default function BlackjackPage() {
     if (phase !== "player-turn" && phase !== "splitting") return;
     const currentHand = hands[activeHandIndex];
     if (!currentHand || currentHand.stood) return;
+    play("deal");
 
     let curShoe = [...shoeRef.current];
     const d = drawCard(curShoe, true);

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useChips } from "@/context/ChipContext";
+import { useSound } from "@/hooks/useSound";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,6 +43,7 @@ interface RollResult {
 
 export default function DicePage() {
   const { chips, addChips, removeChips } = useChips();
+  const { play } = useSound();
 
   const [selectedChip, setSelectedChip] = useState<ChipValue>(100);
   const [target, setTarget] = useState(50);
@@ -81,6 +83,7 @@ export default function DicePage() {
     setMessage("");
     setLastWon(null);
     setLastRoll(null);
+    play("roll");
 
     // Animate random numbers flashing
     let ticks = 0;
@@ -103,8 +106,10 @@ export default function DicePage() {
         if (won) {
           addChips(payout);
           setMessage(`You won ${payout.toLocaleString()} chips!`);
+          play(payout >= selectedChip * 5 ? "bigWin" : "win");
         } else {
           setMessage(`Rolled ${result}. Better luck next time!`);
+          play("lose");
         }
 
         setLastWon(won);
