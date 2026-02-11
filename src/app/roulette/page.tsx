@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { useChips } from "@/context/ChipContext";
+import { motion, useAnimate } from "framer-motion";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -11,15 +12,17 @@ const RED_NUMBERS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 const BLACK_NUMBERS = new Set([2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]);
 
 const CHIP_VALUES = [100, 500, 1000, 5000] as const;
-
 type ChipValue = (typeof CHIP_VALUES)[number];
 
-// The three columns on a standard roulette layout
-const COLUMN_1 = [1,4,7,10,13,16,19,22,25,28,31,34]; // bottom row
-const COLUMN_2 = [2,5,8,11,14,17,20,23,26,29,32,35]; // middle row
-const COLUMN_3 = [3,6,9,12,15,18,21,24,27,30,33,36]; // top row
+// Standard European roulette wheel order (clockwise from 0)
+const WHEEL_ORDER = [0,26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32];
+const SECTOR_ANGLE = 360 / 37;
 
-// Standard table layout: 3 rows x 12 columns (row 3 is top, row 1 is bottom)
+// The three columns on a standard roulette layout
+const COLUMN_1 = [1,4,7,10,13,16,19,22,25,28,31,34];
+const COLUMN_2 = [2,5,8,11,14,17,20,23,26,29,32,35];
+const COLUMN_3 = [3,6,9,12,15,18,21,24,27,30,33,36];
+
 const TABLE_ROWS: number[][] = [
   COLUMN_3, // top row visually
   COLUMN_2, // middle row
@@ -32,8 +35,8 @@ type BetType =
   | { kind: "black" }
   | { kind: "odd" }
   | { kind: "even" }
-  | { kind: "low" }  // 1-18
-  | { kind: "high" } // 19-36
+  | { kind: "low" }
+  | { kind: "high" }
   | { kind: "dozen"; dozen: 1 | 2 | 3 }
   | { kind: "column"; column: 1 | 2 | 3 };
 
@@ -101,16 +104,8 @@ function doesBetWin(bt: BetType, result: number): boolean {
 function getPayout(bt: BetType): number {
   switch (bt.kind) {
     case "straight": return 35;
-    case "red":
-    case "black":
-    case "odd":
-    case "even":
-    case "low":
-    case "high":
-      return 1;
-    case "dozen":
-    case "column":
-      return 2;
+    case "red": case "black": case "odd": case "even": case "low": case "high": return 1;
+    case "dozen": case "column": return 2;
   }
 }
 
@@ -125,18 +120,107 @@ function numberBg(n: number): string {
   return "bg-[#1a1a2e]";
 }
 
-function numberBorder(n: number): string {
-  const c = getNumberColor(n);
-  if (c === "green") return "border-green-500";
-  if (c === "red") return "border-red-500";
-  return "border-gray-600";
-}
-
 function historyBg(n: number): string {
   const c = getNumberColor(n);
   if (c === "green") return "bg-green-600";
   if (c === "red") return "bg-red-600";
   return "bg-gray-700";
+}
+
+// ---------------------------------------------------------------------------
+// Wheel rendering helpers
+// ---------------------------------------------------------------------------
+
+function getWheelColor(n: number): string {
+  const c = getNumberColor(n);
+  if (c === "green") return "#0d7a36";
+  if (c === "red") return "#b91c1c";
+  return "#1a1a2e";
+}
+
+function buildConicGradient(): string {
+  const stops: string[] = [];
+  WHEEL_ORDER.forEach((num, i) => {
+    const color = getWheelColor(num);
+    const startDeg = i * SECTOR_ANGLE;
+    const endDeg = (i + 1) * SECTOR_ANGLE;
+    stops.push(`${color} ${startDeg.toFixed(4)}deg ${endDeg.toFixed(4)}deg`);
+  });
+  return `conic-gradient(from 0deg, ${stops.join(", ")})`;
+}
+
+function buildDividerGradient(): string {
+  const stops: string[] = [];
+  WHEEL_ORDER.forEach((_, i) => {
+    const deg = i * SECTOR_ANGLE;
+    const before = deg - 0.3;
+    const after = deg + 0.3;
+    if (i > 0) {
+      stops.push(`transparent ${before.toFixed(4)}deg`);
+    }
+    stops.push(`rgba(212,175,55,0.6) ${deg.toFixed(4)}deg`);
+    stops.push(`transparent ${after.toFixed(4)}deg`);
+  });
+  return `conic-gradient(from 0deg, transparent 0deg, ${stops.join(", ")}, transparent 360deg)`;
+}
+
+function getWinningAngle(winningNumber: number): number {
+  const index = WHEEL_ORDER.indexOf(winningNumber);
+  return index * SECTOR_ANGLE + SECTOR_ANGLE / 2;
+}
+
+// ---------------------------------------------------------------------------
+// Ball animation (requestAnimationFrame-based for 60fps)
+// ---------------------------------------------------------------------------
+
+function animateBall(
+  duration: number,
+  totalBallRotation: number,
+  outerRadius: number,
+  innerRadius: number,
+  ballEl: HTMLDivElement,
+  onComplete: () => void
+) {
+  const startTime = performance.now();
+
+  function frame(now: number) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+
+    // Custom ease-out: fast start, slow end
+    const eased = 1 - Math.pow(1 - progress, 3.5);
+
+    // Ball angle
+    const currentAngle = totalBallRotation * eased;
+
+    // Radius: starts outer, spirals in during last 60%
+    const spiralStart = 0.35;
+    let currentRadius = outerRadius;
+    if (progress > spiralStart) {
+      const spiralProgress = (progress - spiralStart) / (1 - spiralStart);
+      const spiralEased = spiralProgress * spiralProgress;
+      currentRadius = outerRadius - (outerRadius - innerRadius) * spiralEased;
+    }
+
+    // Small bounce at the very end (last 8%)
+    if (progress > 0.92) {
+      const bounceProgress = (progress - 0.92) / 0.08;
+      const bounce = Math.sin(bounceProgress * Math.PI * 4) * 4 * (1 - bounceProgress);
+      currentRadius += bounce;
+    }
+
+    ballEl.style.transform = `rotate(${currentAngle}deg) translateY(-${currentRadius}px)`;
+
+    if (progress < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      // Ensure final position is exact
+      ballEl.style.transform = `rotate(${totalBallRotation}deg) translateY(-${innerRadius}px)`;
+      onComplete();
+    }
+  }
+
+  requestAnimationFrame(frame);
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +232,115 @@ function ChipBadge({ amount }: { amount: number }) {
     <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center rounded-full bg-[var(--gold)] text-[10px] font-bold text-black px-1 shadow-md z-10 pointer-events-none">
       {amount >= 1000 ? `${amount / 1000}k` : amount}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Roulette Wheel Component
+// ---------------------------------------------------------------------------
+
+function RouletteWheel({
+  wheelScope,
+  ballRef,
+  showBall,
+  result,
+  spinning,
+}: {
+  wheelScope: React.RefObject<HTMLDivElement | null>;
+  ballRef: React.RefObject<HTMLDivElement | null>;
+  showBall: boolean;
+  result: number | null;
+  spinning: boolean;
+}) {
+  const conicGradient = useMemo(() => buildConicGradient(), []);
+  const dividerGradient = useMemo(() => buildDividerGradient(), []);
+
+  // Wheel size: 300px desktop, 250px mobile
+  const wheelSize = 300;
+  const numberRadius = wheelSize / 2 - 32; // Place numbers inside the sectors
+
+  return (
+    <div className="relative flex items-center justify-center">
+      {/* Gold marker triangle at top */}
+      <div className="roulette-marker" />
+
+      {/* Outer gold ring */}
+      <div
+        className={`roulette-outer-ring ${result !== null && !spinning ? "roulette-win-glow" : ""}`}
+        style={{ width: wheelSize + 28, height: wheelSize + 28 }}
+      >
+        {/* Inner chrome ring */}
+        <div
+          className="roulette-inner-ring"
+          style={{ width: wheelSize + 8, height: wheelSize + 8 }}
+        >
+          {/* Spinning wheel body */}
+          <motion.div
+            ref={wheelScope}
+            className="roulette-wheel"
+            style={{ width: wheelSize, height: wheelSize }}
+          >
+            {/* Colored sectors */}
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{ background: conicGradient }}
+            />
+
+            {/* Sector divider lines */}
+            <div
+              className="roulette-dividers"
+              style={{ background: dividerGradient }}
+            />
+
+            {/* Number labels */}
+            {WHEEL_ORDER.map((num, i) => {
+              const angle = i * SECTOR_ANGLE + SECTOR_ANGLE / 2;
+              return (
+                <span
+                  key={num}
+                  className="roulette-number"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    marginTop: -11,
+                    marginLeft: -11,
+                    transform: `rotate(${angle}deg) translateY(-${numberRadius}px) rotate(-${angle}deg)`,
+                  }}
+                >
+                  {num}
+                </span>
+              );
+            })}
+
+            {/* Center hub */}
+            <div
+              className="roulette-center"
+              style={{
+                width: wheelSize * 0.28,
+                height: wheelSize * 0.28,
+              }}
+            >
+              <span className="text-[var(--gold)] font-black text-[10px] tracking-wider select-none">
+                CASINO X
+              </span>
+            </div>
+          </motion.div>
+
+          {/* Ball — positioned relative to the wheel container, NOT inside the rotating wheel */}
+          {showBall && (
+            <div
+              ref={ballRef}
+              className={`roulette-ball ${spinning ? "roulette-ball-spinning" : ""}`}
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -165,9 +358,11 @@ export default function RoulettePage() {
   const [history, setHistory] = useState<number[]>([]);
   const [message, setMessage] = useState<string>("");
   const [lastWin, setLastWin] = useState<number>(0);
-  const [spinDisplayNumber, setSpinDisplayNumber] = useState<number>(0);
+  const [showBall, setShowBall] = useState(false);
 
-  const spinInterval = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [wheelScope, wheelAnimate] = useAnimate<HTMLDivElement>();
+  const ballRef = useRef<HTMLDivElement>(null);
+  const cumulativeRotationRef = useRef(0);
 
   // -------------------------------------------------------------------------
   // Bet placement
@@ -185,7 +380,6 @@ export default function RoulettePage() {
     const existing = bets.get(key);
     const currentAmount = existing ? existing.amount : 0;
 
-    // Try to remove chips for this bet
     const ok = removeChips(selectedChip);
     if (!ok) {
       setMessage("Not enough chips!");
@@ -202,7 +396,6 @@ export default function RoulettePage() {
 
   const clearBets = useCallback(() => {
     if (spinning) return;
-    // Refund all bets
     let refund = 0;
     bets.forEach((b) => { refund += b.amount; });
     if (refund > 0) addChips(refund);
@@ -226,51 +419,90 @@ export default function RoulettePage() {
     setMessage("");
     setResult(null);
     setLastWin(0);
+    setShowBall(true);
 
-    // Animate the number display with progressive slowdown using chained timeouts
-    const totalTicks = 40;
-    const winningNumber = Math.floor(Math.random() * 37); // 0-36
+    const winningNumber = Math.floor(Math.random() * 37);
+    const spinDuration = 4500 + Math.random() * 1000; // 4.5-5.5 seconds
 
-    const tick = (count: number) => {
-      if (count >= totalTicks) {
-        // Final result
-        setSpinDisplayNumber(winningNumber);
-        setResult(winningNumber);
+    // Calculate the target angle for the winning number
+    const winAngle = getWinningAngle(winningNumber);
 
-        // Calculate winnings
-        let totalWinnings = 0;
-        bets.forEach((bet) => {
-          if (doesBetWin(bet.type, winningNumber)) {
-            const payout = getPayout(bet.type);
-            // Player gets back original bet + winnings
-            totalWinnings += bet.amount + bet.amount * payout;
-          }
-        });
+    // Wheel spins clockwise (negative direction), 3-5 full rotations
+    const wheelExtraRotations = 360 * (3 + Math.floor(Math.random() * 3));
+    // The wheel must stop so that the winning sector is under the marker (top, 0°).
+    // If the wheel rotates by W degrees clockwise, the sector at angle S on the wheel
+    // will be at the top when W ≡ S (mod 360). But we spin CW = negative.
+    // So: finalWheelRotation = previousRotation - (wheelExtraRotations + winAngle)
+    // Then the sector at `winAngle` on the wheel is at 0° (top/marker).
+    const targetWheelRotation = cumulativeRotationRef.current - (wheelExtraRotations + winAngle);
 
-        if (totalWinnings > 0) {
-          addChips(totalWinnings);
-          setLastWin(totalWinnings);
-          setMessage(`Winner! +${totalWinnings.toLocaleString()} chips`);
-        } else {
-          setMessage(`No luck. The ball landed on ${winningNumber}.`);
-        }
+    // Ball spins in opposite direction (counter-clockwise from ball's perspective,
+    // which means positive rotation). It does 5-7 full orbits.
+    const ballOrbits = 5 + Math.floor(Math.random() * 3);
+    // The ball must also end up at the top (0° in viewport) to land in the pocket
+    // that the marker points to. Since the ball's transform is independent of the
+    // wheel's rotation, it just needs to end at 0° (or 360°*n).
+    // We'll actually make it end at a tiny offset (0°) which is the marker position.
+    const totalBallRotation = 360 * ballOrbits; // ends at 0° effectively (full rotations)
 
-        setHistory((prev) => [winningNumber, ...prev].slice(0, 10));
-        setBets(new Map());
-        setSpinning(false);
-        return;
+    // Wheel radius for ball orbit
+    const wheelRadius = 150; // half of 300px wheel
+    const outerBallRadius = wheelRadius - 8;
+    const innerBallRadius = wheelRadius - 38; // lands in the pocket area
+
+    // Reset ball position to top
+    if (ballRef.current) {
+      ballRef.current.style.transform = `rotate(0deg) translateY(-${outerBallRadius}px)`;
+    }
+
+    // Start wheel animation
+    wheelAnimate(
+      wheelScope.current!,
+      { rotate: targetWheelRotation },
+      {
+        duration: spinDuration / 1000,
+        ease: [0.15, 0.85, 0.25, 1], // dramatic ease-out
       }
+    );
 
-      // Show random number
-      setSpinDisplayNumber(Math.floor(Math.random() * 37));
+    // Start ball animation
+    if (ballRef.current) {
+      animateBall(
+        spinDuration,
+        totalBallRotation,
+        outerBallRadius,
+        innerBallRadius,
+        ballRef.current,
+        () => {
+          // Animation complete — resolve the game
+          cumulativeRotationRef.current = targetWheelRotation;
 
-      // Progressive slowdown: faster early, slower near the end
-      const delay = count < 15 ? 50 : count < 25 ? 80 : count < 33 ? 140 : 220;
-      spinInterval.current = setTimeout(() => tick(count + 1), delay);
-    };
+          setResult(winningNumber);
 
-    tick(0);
-  }, [spinning, bets, addChips]);
+          // Calculate winnings (unchanged logic)
+          let totalWinnings = 0;
+          bets.forEach((bet) => {
+            if (doesBetWin(bet.type, winningNumber)) {
+              const payout = getPayout(bet.type);
+              totalWinnings += bet.amount + bet.amount * payout;
+            }
+          });
+
+          if (totalWinnings > 0) {
+            addChips(totalWinnings);
+            setLastWin(totalWinnings);
+            setMessage(`Winner! +${totalWinnings.toLocaleString()} chips`);
+          } else {
+            setMessage(`No luck. The ball landed on ${winningNumber}.`);
+          }
+
+          setHistory((prev) => [winningNumber, ...prev].slice(0, 10));
+          setBets(new Map());
+          setSpinning(false);
+        }
+      );
+    }
+  }, [spinning, bets, addChips, wheelAnimate, wheelScope]);
 
   // -------------------------------------------------------------------------
   // Helpers for rendering bet amounts on layout cells
@@ -302,54 +534,72 @@ export default function RoulettePage() {
         </div>
       </div>
 
-      {/* Spin display / result */}
+      {/* Wheel Section */}
       <div className="max-w-6xl mx-auto px-4 mb-6">
-        <div className="glass glow-gold rounded-2xl p-6 flex flex-col items-center justify-center">
-          {/* Wheel display */}
-          <div className="relative mb-4">
-            <div
-              className={`w-28 h-28 rounded-full flex items-center justify-center text-4xl font-black border-4 transition-all duration-200 ${
-                spinning
-                  ? "border-[var(--gold)] animate-pulse"
-                  : result !== null
-                  ? `${numberBorder(result)} ${numberBg(result)}`
-                  : "border-[var(--casino-border)] bg-[var(--casino-card)]"
-              }`}
-            >
-              {spinning ? (
-                <span className="text-white">{spinDisplayNumber}</span>
-              ) : result !== null ? (
-                <span className="text-white">{result}</span>
-              ) : (
-                <span className="text-gray-500">?</span>
-              )}
-            </div>
-            {spinning && (
-              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[var(--gold)] animate-spin" />
-            )}
+        <div className="glass rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden">
+          {/* The Wheel */}
+          <div className="mb-4 scale-[0.85] md:scale-100 origin-center">
+            <RouletteWheel
+              wheelScope={wheelScope}
+              ballRef={ballRef}
+              showBall={showBall}
+              result={result}
+              spinning={spinning}
+            />
           </div>
 
-          {/* Message */}
-          {message && (
-            <p
-              className={`text-lg font-bold mb-2 animate-fade-in ${
-                lastWin > 0 ? "text-[var(--gold)]" : "text-gray-300"
-              }`}
-            >
-              {message}
-            </p>
+          {/* Result display */}
+          {result !== null && !spinning && (
+            <div className="animate-fade-in mb-3 flex items-center gap-3">
+              <div
+                className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-black text-white border-2 ${
+                  getNumberColor(result) === "green"
+                    ? "bg-green-700 border-green-400"
+                    : getNumberColor(result) === "red"
+                    ? "bg-red-700 border-red-400"
+                    : "bg-[#1a1a2e] border-gray-500"
+                }`}
+              >
+                {result}
+              </div>
+              <div>
+                <p className="text-sm text-gray-400 uppercase tracking-wider">
+                  Result
+                </p>
+                <p
+                  className={`text-lg font-bold ${
+                    lastWin > 0 ? "text-[var(--gold)]" : "text-gray-300"
+                  }`}
+                >
+                  {message}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Spinning message */}
+          {spinning && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 bg-[var(--gold)] rounded-full animate-pulse" />
+              <span className="text-sm text-gray-300">No more bets...</span>
+            </div>
+          )}
+
+          {/* Non-spinning, non-result message */}
+          {message && !spinning && result === null && (
+            <p className="text-sm text-red-400 mb-3 animate-fade-in">{message}</p>
           )}
 
           {/* History */}
           {history.length > 0 && (
-            <div className="flex items-center gap-1 flex-wrap justify-center">
-              <span className="text-xs text-gray-500 mr-2">History:</span>
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              <span className="text-xs text-gray-500 mr-1">History:</span>
               {history.map((n, i) => (
                 <span
                   key={`${n}-${i}`}
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${historyBg(n)} ${
-                    i === 0 ? "ring-2 ring-[var(--gold)] scale-110" : "opacity-70"
-                  }`}
+                    i === 0 ? "ring-2 ring-[var(--gold)] scale-110" : "opacity-60"
+                  } transition-all`}
                 >
                   {n}
                 </span>
@@ -468,7 +718,7 @@ export default function RoulettePage() {
 
             {/* Dozens row */}
             <div className="flex gap-[2px] mt-[2px]">
-              <div className="w-14 flex-shrink-0" /> {/* spacer for zero column */}
+              <div className="w-14 flex-shrink-0" />
               {([1, 2, 3] as const).map((d) => {
                 const amt = getBetAmount({ kind: "dozen", dozen: d });
                 const label = d === 1 ? "1st 12" : d === 2 ? "2nd 12" : "3rd 12";
@@ -484,13 +734,12 @@ export default function RoulettePage() {
                   </button>
                 );
               })}
-              <div className="w-14 flex-shrink-0" /> {/* spacer for column bets */}
+              <div className="w-14 flex-shrink-0" />
             </div>
 
             {/* Outside bets row: 1-18, Even, Red, Black, Odd, 19-36 */}
             <div className="flex gap-[2px] mt-[2px]">
               <div className="w-14 flex-shrink-0" />
-              {/* 1-18 */}
               <OutsideBetButton
                 label="1-18"
                 betType={{ kind: "low" }}
@@ -499,7 +748,6 @@ export default function RoulettePage() {
                 spinning={spinning}
                 extraClass="bg-[var(--casino-green)]/40 border-green-700/50"
               />
-              {/* Even */}
               <OutsideBetButton
                 label="EVEN"
                 betType={{ kind: "even" }}
@@ -508,7 +756,6 @@ export default function RoulettePage() {
                 spinning={spinning}
                 extraClass="bg-[var(--casino-green)]/40 border-green-700/50"
               />
-              {/* Red */}
               <OutsideBetButton
                 label="RED"
                 betType={{ kind: "red" }}
@@ -517,7 +764,6 @@ export default function RoulettePage() {
                 spinning={spinning}
                 extraClass="bg-[var(--casino-red)] border-red-700/50"
               />
-              {/* Black */}
               <OutsideBetButton
                 label="BLACK"
                 betType={{ kind: "black" }}
@@ -526,7 +772,6 @@ export default function RoulettePage() {
                 spinning={spinning}
                 extraClass="bg-[#1a1a2e] border-gray-600/50"
               />
-              {/* Odd */}
               <OutsideBetButton
                 label="ODD"
                 betType={{ kind: "odd" }}
@@ -535,7 +780,6 @@ export default function RoulettePage() {
                 spinning={spinning}
                 extraClass="bg-[var(--casino-green)]/40 border-green-700/50"
               />
-              {/* 19-36 */}
               <OutsideBetButton
                 label="19-36"
                 betType={{ kind: "high" }}
