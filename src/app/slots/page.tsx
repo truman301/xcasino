@@ -780,7 +780,7 @@ export default function SlotsPage() {
         {/* Bottom info */}
         <div className="mt-8 text-center animate-fade-in">
           <p className="text-xs text-gray-600">
-            XCasino Slots uses a random number generator. Virtual chips have no
+            Casino X Slots uses a random number generator. Virtual chips have no
             real-world value. Play responsibly.
           </p>
         </div>

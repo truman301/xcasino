@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import { ChipProvider } from "@/context/ChipContext";
 
 export const metadata: Metadata = {
-  title: "XCasino - Free Social Casino",
+  title: "Casino X - Free Social Casino",
   description: "Play poker, blackjack, roulette and slots with friends. No real money gambling - just fun!",
 };
 

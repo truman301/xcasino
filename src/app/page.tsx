@@ -56,8 +56,8 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-[var(--casino-card)] to-transparent" />
         <div className="relative max-w-5xl mx-auto text-center">
           <h1 className="text-5xl md:text-7xl font-black mb-4 tracking-tight">
+            <span className="text-white">Casino</span>{" "}
             <span className="text-[var(--gold)]">X</span>
-            <span className="text-white">Casino</span>
           </h1>
           <p className="text-xl text-gray-400 mb-2">
             Free social casino — no real money gambling
@@ -111,7 +111,7 @@ export default function Home() {
       <section className="border-t border-[var(--casino-border)] py-12 px-4">
         <div className="max-w-5xl mx-auto text-center">
           <p className="text-gray-500 text-sm">
-            XCasino is a free-to-play social casino. Virtual chips have no real-world monetary value and cannot be redeemed for cash.
+            Casino X is a free-to-play social casino. Virtual chips have no real-world monetary value and cannot be redeemed for cash.
             You must be 18 or older to play. Play responsibly.
           </p>
         </div>

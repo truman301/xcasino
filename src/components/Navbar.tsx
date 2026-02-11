@@ -31,8 +31,8 @@ export default function Navbar() {
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2">
               <span className="text-2xl font-black tracking-tight">
+                <span className="text-white">Casino</span>{" "}
                 <span className="text-[var(--gold)]">X</span>
-                <span className="text-white">Casino</span>
               </span>
             </Link>
             <div className="hidden md:flex items-center gap-4">
@@ -86,7 +86,7 @@ export default function Navbar() {
       {showLogin && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
           <div className="bg-[var(--casino-card)] border border-[var(--casino-border)] rounded-2xl p-8 w-full max-w-sm animate-fade-in">
-            <h2 className="text-xl font-bold mb-1">Welcome to <span className="text-[var(--gold)]">X</span>Casino</h2>
+            <h2 className="text-xl font-bold mb-1">Welcome to <span className="text-white">Casino</span> <span className="text-[var(--gold)]">X</span></h2>
             <p className="text-gray-400 text-sm mb-6">Enter a display name to play</p>
             <form onSubmit={handleLogin}>
               <input

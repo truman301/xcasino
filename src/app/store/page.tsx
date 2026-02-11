@@ -249,9 +249,9 @@ export default function StorePage() {
         <div className="border-t border-[var(--casino-border)] pt-8">
           <div className="text-center max-w-2xl mx-auto">
             <p className="text-gray-500 text-sm leading-relaxed">
-              All chips in XCasino are virtual and hold no real-world monetary
+              All chips in Casino X are virtual and hold no real-world monetary
               value. Chips cannot be redeemed, exchanged, or cashed out for real
-              money, goods, or services. XCasino is a free-to-play social casino
+              money, goods, or services. Casino X is a free-to-play social casino
               intended for entertainment purposes only. You must be 18 or older
               to play. Please play responsibly.
             </p>
