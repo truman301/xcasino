@@ -73,7 +73,7 @@ export default function Home() {
               <span className="text-sm text-gray-400">chips</span>
             </div>
             <Link href="/store" className="btn-casino text-lg px-6 py-3">
-              Get More Chips
+              Free Chips
             </Link>
           </div>
         </div>
