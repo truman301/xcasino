@@ -5,9 +5,18 @@ import { useChips } from "@/context/ChipContext";
 import { useState } from "react";
 
 export default function Navbar() {
-  const { chips, username, isLoggedIn, login, logout } = useChips();
-  const [showLogin, setShowLogin] = useState(false);
-  const [loginName, setLoginName] = useState("");
+  const {
+    chips, username, isLoggedIn, isAdmin, loading,
+    signIn, signUp, signOut, login, supabaseReady,
+  } = useChips();
+
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const formatChips = (n: number) => {
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
@@ -15,13 +24,64 @@ export default function Navbar() {
     return n.toLocaleString();
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginName.trim()) {
-      login(loginName.trim());
-      setShowLogin(false);
-      setLoginName("");
+    setError("");
+    setSubmitting(true);
+
+    try {
+      if (!supabaseReady) {
+        // Legacy mode: just use display name
+        if (displayName.trim()) {
+          login(displayName.trim());
+          setShowAuth(false);
+          resetForm();
+        } else {
+          setError("Display name is required");
+        }
+        setSubmitting(false);
+        return;
+      }
+
+      if (authMode === "signup") {
+        if (!displayName.trim()) {
+          setError("Display name is required");
+          setSubmitting(false);
+          return;
+        }
+        const { error: signUpError } = await signUp(email, password, displayName.trim());
+        if (signUpError) {
+          setError(signUpError.message);
+        } else {
+          setShowAuth(false);
+          resetForm();
+        }
+      } else {
+        const { error: signInError } = await signIn(email, password);
+        if (signInError) {
+          setError(signInError.message);
+        } else {
+          setShowAuth(false);
+          resetForm();
+        }
+      }
+    } catch {
+      setError("An unexpected error occurred");
     }
+    setSubmitting(false);
+  };
+
+  const resetForm = () => {
+    setEmail("");
+    setPassword("");
+    setDisplayName("");
+    setError("");
+    setAuthMode("login");
+  };
+
+  const handleOpenAuth = () => {
+    resetForm();
+    setShowAuth(true);
   };
 
   return (
@@ -52,6 +112,14 @@ export default function Navbar() {
                   {link.label}
                 </Link>
               ))}
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="text-sm text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/[0.02]"
+                >
+                  Admin
+                </Link>
+              )}
             </div>
           </div>
 
@@ -65,11 +133,23 @@ export default function Navbar() {
               <span className="text-xs text-red-400 font-bold ml-0.5 group-hover:text-red-300">+</span>
             </Link>
 
-            {isLoggedIn ? (
+            {isLoggedIn && (
+              <Link
+                href="/leaderboard"
+                className="text-sm text-gray-500 hover:text-[var(--gold)] transition-colors px-2"
+                title="Leaderboards"
+              >
+                🏆
+              </Link>
+            )}
+
+            {loading ? (
+              <div className="w-16 h-8 rounded-lg bg-[var(--casino-card)] animate-pulse" />
+            ) : isLoggedIn ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-400">{username}</span>
                 <button
-                  onClick={logout}
+                  onClick={() => signOut()}
                   className="text-xs text-gray-600 hover:text-red-400 transition-colors"
                 >
                   Logout
@@ -77,7 +157,7 @@ export default function Navbar() {
               </div>
             ) : (
               <button
-                onClick={() => setShowLogin(true)}
+                onClick={handleOpenAuth}
                 className="btn-casino text-sm"
               >
                 Login
@@ -89,7 +169,7 @@ export default function Navbar() {
         <div className="accent-line" />
       </nav>
 
-      {showLogin && (
+      {showAuth && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
           <div className="bg-[var(--casino-card)] border border-[var(--casino-border)] rounded-2xl p-8 w-full max-w-sm animate-fade-in shadow-2xl shadow-black/50">
             <h2 className="text-xl font-bold mb-1">
@@ -97,29 +177,123 @@ export default function Navbar() {
               <span className="text-[var(--gold)]">X</span>
             </h2>
             <div className="accent-line mb-4 mt-2" />
-            <p className="text-gray-500 text-sm mb-6">Enter a display name to play</p>
-            <form onSubmit={handleLogin}>
-              <input
-                type="text"
-                value={loginName}
-                onChange={(e) => setLoginName(e.target.value)}
-                placeholder="Your display name"
-                className="w-full bg-[var(--casino-darker)] border border-[var(--casino-border)] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[var(--gold)]/50 transition-colors mb-4"
-                autoFocus
-              />
-              <div className="flex gap-3">
-                <button type="submit" className="btn-casino flex-1">
-                  Play Now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowLogin(false)}
-                  className="btn-casino-outline flex-1"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+
+            {supabaseReady ? (
+              <>
+                {/* Tabs */}
+                <div className="flex gap-1 mb-6 bg-[var(--casino-darker)] rounded-lg p-1">
+                  <button
+                    onClick={() => { setAuthMode("login"); setError(""); }}
+                    className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${
+                      authMode === "login"
+                        ? "bg-[var(--casino-card)] text-[var(--gold)] shadow"
+                        : "text-gray-500 hover:text-gray-300"
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => { setAuthMode("signup"); setError(""); }}
+                    className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${
+                      authMode === "signup"
+                        ? "bg-[var(--casino-card)] text-[var(--gold)] shadow"
+                        : "text-gray-500 hover:text-gray-300"
+                    }`}
+                  >
+                    Sign Up
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit}>
+                  {authMode === "signup" && (
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Display name"
+                      className="w-full bg-[var(--casino-darker)] border border-[var(--casino-border)] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[var(--gold)]/50 transition-colors mb-3"
+                      autoFocus
+                    />
+                  )}
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email address"
+                    className="w-full bg-[var(--casino-darker)] border border-[var(--casino-border)] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[var(--gold)]/50 transition-colors mb-3"
+                    autoFocus={authMode === "login"}
+                    required
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password"
+                    className="w-full bg-[var(--casino-darker)] border border-[var(--casino-border)] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[var(--gold)]/50 transition-colors mb-4"
+                    required
+                    minLength={6}
+                  />
+
+                  {error && (
+                    <p className="text-sm text-red-400 mb-3 animate-fade-in">{error}</p>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="btn-casino flex-1 disabled:opacity-50"
+                    >
+                      {submitting
+                        ? "..."
+                        : authMode === "login"
+                        ? "Sign In"
+                        : "Create Account"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAuth(false); resetForm(); }}
+                      className="btn-casino-outline flex-1"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                {/* Legacy: display name only */}
+                <p className="text-gray-500 text-sm mb-6">Enter a display name to play</p>
+                <form onSubmit={handleSubmit}>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Your display name"
+                    className="w-full bg-[var(--casino-darker)] border border-[var(--casino-border)] rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[var(--gold)]/50 transition-colors mb-4"
+                    autoFocus
+                  />
+
+                  {error && (
+                    <p className="text-sm text-red-400 mb-3 animate-fade-in">{error}</p>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button type="submit" className="btn-casino flex-1">
+                      Play Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAuth(false); resetForm(); }}
+                      className="btn-casino-outline flex-1"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
             <p className="text-xs text-gray-600 mt-4 text-center">
               You must be 18+ to play. No real money involved.
             </p>
