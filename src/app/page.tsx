@@ -52,6 +52,30 @@ const games = [
     players: "Solo",
     hot: true,
   },
+  {
+    name: "Dice",
+    href: "/dice",
+    icon: "🎲",
+    description: "Roll over or under. Set your odds and win big.",
+    accent: "from-[#0a1a0a] to-[#0f0f18]",
+    border: "border-green-900/30",
+    hoverBorder: "hover:border-[var(--gold)]/50",
+    iconColor: "text-green-400",
+    players: "Solo",
+    hot: false,
+  },
+  {
+    name: "Crash",
+    href: "/crash",
+    icon: "📈",
+    description: "Cash out before the multiplier crashes!",
+    accent: "from-[#1a1005] to-[#0f0f18]",
+    border: "border-amber-900/30",
+    hoverBorder: "hover:border-[var(--gold)]/50",
+    iconColor: "text-[var(--gold)]",
+    players: "Solo",
+    hot: true,
+  },
 ];
 
 export default function Home() {
