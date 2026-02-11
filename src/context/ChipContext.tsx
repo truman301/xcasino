@@ -209,6 +209,7 @@ export function ChipProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           data: { username },
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
         },
       });
       return { error };

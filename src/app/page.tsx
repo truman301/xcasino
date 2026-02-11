@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useChips } from "@/context/ChipContext";
+import { useState, useEffect } from "react";
 
 const games = [
   {
@@ -80,9 +81,43 @@ const games = [
 
 export default function Home() {
   const { chips } = useChips();
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("verified") === "true") {
+      setToast("Email verified! You can now sign in.");
+      window.history.replaceState({}, "", "/");
+    }
+    const authError = params.get("auth_error");
+    if (authError) {
+      setToast(`Verification error: ${authError}`);
+      window.history.replaceState({}, "", "/");
+    }
+  }, []);
 
   return (
     <div className="min-h-screen">
+      {/* Email verification toast */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] animate-fade-in">
+          <div className="glass glow-gold rounded-xl px-6 py-3 flex items-center gap-3 shadow-2xl shadow-black/50 border border-[var(--gold)]/30">
+            <svg className="w-5 h-5 text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-sm text-white font-medium">{toast}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="text-gray-500 hover:text-white transition-colors ml-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <section className="relative overflow-hidden py-24 px-4">
         <div className="absolute inset-0 bg-gradient-to-b from-[#0f0808] via-[var(--casino-darker)] to-transparent" />
