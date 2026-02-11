@@ -1,22 +1,26 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useChips } from "@/context/ChipContext";
 import dynamic from "next/dynamic";
-import type { RouletteWheel3DHandle } from "./RouletteWheel3D";
 
-// Dynamic import — Three.js must only run client-side
-const RouletteWheel3D = dynamic(() => import("./RouletteWheel3D"), {
-  ssr: false,
-  loading: () => (
-    <div
-      className="flex items-center justify-center rounded-full"
-      style={{ width: 380, height: 380, background: "radial-gradient(circle, #0f0f18, #050508)" }}
-    >
-      <div className="text-gray-500 text-sm animate-pulse">Loading wheel...</div>
-    </div>
-  ),
-});
+// Dynamic import for react-casino-roulette (client only)
+const RouletteWheelLib = dynamic(
+  () => import("react-casino-roulette").then((mod) => mod.RouletteWheel),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="flex items-center justify-center rounded-full"
+        style={{ width: 380, height: 380, background: "radial-gradient(circle, #0f0f18, #050508)" }}
+      >
+        <div className="text-gray-500 text-sm animate-pulse">Loading wheel...</div>
+      </div>
+    ),
+  }
+);
+
+import "react-casino-roulette/dist/index.css";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -164,7 +168,10 @@ export default function RoulettePage() {
   const [message, setMessage] = useState<string>("");
   const [lastWin, setLastWin] = useState<number>(0);
 
-  const wheelRef = useRef<RouletteWheel3DHandle>(null);
+  // react-casino-roulette state
+  const [startSpin, setStartSpin] = useState(false);
+  const [winningBet, setWinningBet] = useState<string>("0");
+  const [pendingWinningNumber, setPendingWinningNumber] = useState<number | null>(null);
 
   // -------------------------------------------------------------------------
   // Bet placement
@@ -210,7 +217,7 @@ export default function RoulettePage() {
   // Spin
   // -------------------------------------------------------------------------
 
-  const spin = useCallback(async () => {
+  const spin = useCallback(() => {
     if (spinning) return;
     if (bets.size === 0) {
       setMessage("Place at least one bet!");
@@ -223,15 +230,15 @@ export default function RoulettePage() {
     setLastWin(0);
 
     const winningNumber = Math.floor(Math.random() * 37);
-    const spinDuration = 4500 + Math.random() * 1500; // 4.5-6 seconds
+    setPendingWinningNumber(winningNumber);
+    setWinningBet(String(winningNumber));
+    setStartSpin(true);
+  }, [spinning, bets]);
 
-    // Trigger Three.js wheel spin
-    if (wheelRef.current) {
-      await wheelRef.current.spin(winningNumber, spinDuration);
-    } else {
-      // Fallback: just wait if wheel hasn't loaded
-      await new Promise((r) => setTimeout(r, spinDuration));
-    }
+  const handleSpinEnd = useCallback(() => {
+    setStartSpin(false);
+    if (pendingWinningNumber === null) return;
+    const winningNumber = pendingWinningNumber;
 
     // Calculate winnings
     setResult(winningNumber);
@@ -255,7 +262,8 @@ export default function RoulettePage() {
     setHistory((prev) => [winningNumber, ...prev].slice(0, 10));
     setBets(new Map());
     setSpinning(false);
-  }, [spinning, bets, addChips]);
+    setPendingWinningNumber(null);
+  }, [pendingWinningNumber, bets, addChips]);
 
   // -------------------------------------------------------------------------
   // Bet amount helper
@@ -295,13 +303,13 @@ export default function RoulettePage() {
             background: "radial-gradient(ellipse at 50% 40%, rgba(15,15,24,0.95), rgba(5,5,8,0.98))",
           }}
         >
-          {/* The 3D Wheel */}
-          <div className="mb-4 scale-[0.78] sm:scale-[0.88] md:scale-100 origin-center">
-            <RouletteWheel3D
-              ref={wheelRef}
-              size={400}
-              result={result}
-              spinning={spinning}
+          {/* Casino Roulette Wheel */}
+          <div className="mb-4">
+            <RouletteWheelLib
+              start={startSpin}
+              winningBet={winningBet}
+              onSpinningEnd={handleSpinEnd}
+              withAnimation={true}
             />
           </div>
 
