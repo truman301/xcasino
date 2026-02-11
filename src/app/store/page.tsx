@@ -77,17 +77,19 @@ export default function StorePage() {
     <div className="min-h-screen pb-20">
       {/* Header / Balance Section */}
       <section className="relative overflow-hidden py-16 px-4">
-        <div className="absolute inset-0 bg-gradient-to-b from-[var(--casino-card)] to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0f0808] via-[var(--casino-darker)] to-transparent" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 bg-red-900/8 rounded-full blur-3xl pointer-events-none" />
         <div className="relative max-w-4xl mx-auto text-center animate-fade-in">
           <h1 className="text-4xl md:text-5xl font-black mb-2 tracking-tight">
             <span className="text-[var(--gold)]">Free</span>{" "}
             <span className="text-white">Chips</span>
           </h1>
-          <p className="text-gray-400 mb-8">
+          <div className="accent-line max-w-xs mx-auto mb-4 mt-2" />
+          <p className="text-gray-500 mb-8">
             Grab free chips and get back in the game
           </p>
 
-          <div className="inline-flex items-center gap-4 glass rounded-2xl px-8 py-5 glow-gold">
+          <div className="inline-flex items-center gap-4 glass rounded-2xl px-8 py-5 glow-gold-sm">
             <span className="text-4xl animate-chip-bounce">🪙</span>
             <div className="text-left">
               <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">
@@ -105,7 +107,7 @@ export default function StorePage() {
       <section className="max-w-3xl mx-auto px-4 mb-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Daily Bonus */}
-          <div className="glass rounded-2xl p-8 border border-[var(--casino-border)] animate-fade-in flex flex-col items-center text-center">
+          <div className="glass rounded-2xl p-8 border border-[var(--gold)]/10 hover:border-[var(--gold)]/25 transition-colors animate-fade-in flex flex-col items-center text-center">
             <div className="text-5xl mb-4 animate-chip-bounce">🎁</div>
             <h3 className="text-xl font-bold text-white mb-2">
               Daily Bonus
@@ -171,7 +173,7 @@ export default function StorePage() {
           </div>
 
           {/* Broke? Free Refill */}
-          <div className="glass rounded-2xl p-8 border border-[var(--casino-border)] animate-fade-in flex flex-col items-center text-center" style={{ animationDelay: "100ms", animationFillMode: "backwards" }}>
+          <div className="glass rounded-2xl p-8 border border-red-900/20 hover:border-red-900/40 transition-colors animate-fade-in flex flex-col items-center text-center" style={{ animationDelay: "100ms", animationFillMode: "backwards" }}>
             <div className="text-5xl mb-4">🆘</div>
             <h3 className="text-xl font-bold text-white mb-2">
               Free Refill
@@ -246,9 +248,10 @@ export default function StorePage() {
 
       {/* Disclaimer */}
       <section className="max-w-3xl mx-auto px-4">
-        <div className="border-t border-[var(--casino-border)] pt-8">
+        <div className="accent-line-gold mb-8" />
+        <div className="pt-4">
           <div className="text-center max-w-2xl mx-auto">
-            <p className="text-gray-500 text-sm leading-relaxed">
+            <p className="text-gray-600 text-sm leading-relaxed">
               All chips in Casino X are virtual and hold no real-world monetary
               value. Chips cannot be redeemed, exchanged, or cashed out for real
               money, goods, or services. Casino X is a free-to-play social casino

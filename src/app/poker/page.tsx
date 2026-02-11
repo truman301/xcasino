@@ -1432,7 +1432,7 @@ export default function PokerPage() {
                   disabled={!isPlayerTurn}
                   className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                     isPlayerTurn
-                      ? "bg-red-700 hover:bg-red-600 text-white active:scale-95"
+                      ? "bg-gradient-to-r from-red-800 to-red-700 hover:from-red-700 hover:to-red-600 border border-red-600/50 text-white active:scale-95 shadow-lg"
                       : "bg-gray-800 text-gray-600 cursor-not-allowed"
                   }`}
                 >
@@ -1446,7 +1446,7 @@ export default function PokerPage() {
                     disabled={!isPlayerTurn}
                     className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                       isPlayerTurn
-                        ? "bg-blue-700 hover:bg-blue-600 text-white active:scale-95"
+                        ? "bg-gradient-to-r from-gray-600 to-gray-500 hover:from-gray-500 hover:to-gray-400 text-white active:scale-95 shadow-lg"
                         : "bg-gray-800 text-gray-600 cursor-not-allowed"
                     }`}
                   >
@@ -1458,7 +1458,7 @@ export default function PokerPage() {
                     disabled={!isPlayerTurn}
                     className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                       isPlayerTurn
-                        ? "bg-blue-700 hover:bg-blue-600 text-white active:scale-95"
+                        ? "bg-gradient-to-r from-green-700 to-green-600 hover:from-green-600 hover:to-green-500 text-white active:scale-95 shadow-lg"
                         : "bg-gray-800 text-gray-600 cursor-not-allowed"
                     }`}
                   >
@@ -1481,7 +1481,7 @@ export default function PokerPage() {
                   className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                     isPlayerTurn &&
                     (playerData?.chipStack || 0) > callAmount
-                      ? "bg-green-700 hover:bg-green-600 text-white active:scale-95"
+                      ? "bg-gradient-to-r from-[var(--gold-dark)] to-[var(--gold)] hover:brightness-110 text-black font-bold active:scale-95 shadow-lg"
                       : "bg-gray-800 text-gray-600 cursor-not-allowed"
                   }`}
                 >
@@ -1498,7 +1498,7 @@ export default function PokerPage() {
                   }
                   className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
                     isPlayerTurn && (playerData?.chipStack || 0) > 0
-                      ? "bg-gradient-to-r from-amber-600 to-red-600 hover:brightness-110 text-white active:scale-95 shadow-lg"
+                      ? "bg-gradient-to-r from-red-600 to-[var(--gold-dark)] hover:brightness-110 text-white active:scale-95 shadow-lg shadow-red-900/40 border border-red-500/30"
                       : "bg-gray-800 text-gray-600 cursor-not-allowed"
                   }`}
                 >

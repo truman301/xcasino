@@ -389,14 +389,14 @@ export default function RoulettePage() {
             <button
               onClick={clearBets}
               disabled={spinning || bets.size === 0}
-              className="px-4 py-2 rounded-lg text-sm font-bold border border-[var(--casino-border)] bg-[var(--casino-card)] text-gray-300 hover:border-red-500 hover:text-red-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="btn-casino-outline px-4 py-2 rounded-lg text-sm hover:bg-red-900/20 hover:border-red-500 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               Clear Bets
             </button>
             <button
               onClick={spin}
               disabled={spinning || bets.size === 0}
-              className="px-8 py-3 rounded-xl text-base font-black bg-gradient-to-r from-[var(--gold-dark)] to-[var(--gold)] text-black hover:shadow-lg hover:shadow-[var(--gold)]/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="btn-casino px-8 py-3 rounded-xl text-base tracking-wider disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {spinning ? "Spinning..." : "SPIN"}
             </button>

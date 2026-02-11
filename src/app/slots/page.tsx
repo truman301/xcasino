@@ -336,7 +336,7 @@ export default function SlotsPage() {
       )}
 
       {/* Background glow effects */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-red-900/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-[var(--casino-accent)]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative max-w-4xl mx-auto px-4 pt-8">
@@ -373,7 +373,7 @@ export default function SlotsPage() {
             className="relative mx-auto max-w-lg rounded-2xl overflow-hidden"
             style={{
               background:
-                "linear-gradient(145deg, #2a1f4e 0%, #1a1040 40%, #0f0a25 100%)",
+                "linear-gradient(145deg, #3a1018 0%, #1a0a10 40%, #0f0508 100%)",
               border: "2px solid transparent",
               borderImage:
                 "linear-gradient(180deg, var(--gold) 0%, var(--gold-dark, #8a6f1a) 50%, var(--gold) 100%) 1",
@@ -411,9 +411,9 @@ export default function SlotsPage() {
                 style={{
                   background:
                     "linear-gradient(180deg, #0a0818 0%, #12101f 50%, #0a0818 100%)",
-                  border: "3px solid #2a2550",
+                  border: "3px solid rgba(var(--gold-rgb, 212,175,55), 0.2)",
                   boxShadow:
-                    "inset 0 0 30px rgba(0,0,0,0.8), 0 0 15px rgba(139,92,246,0.1)",
+                    "inset 0 0 30px rgba(0,0,0,0.8), 0 0 15px rgba(220,38,38,0.1)",
                 }}
               >
                 {/* Top shadow gradient */}
@@ -434,15 +434,15 @@ export default function SlotsPage() {
                 />
 
                 {/* Reel windows */}
-                <div className="flex items-stretch divide-x divide-[#2a2550]">
+                <div className="flex items-stretch divide-x divide-[var(--gold)]/20">
                   {[0, 1, 2].map((reelIndex) => (
                     <div
                       key={reelIndex}
                       className="flex-1 h-[100px] md:h-[120px] overflow-hidden relative flex items-center justify-center"
                       style={{
                         background: reelsStopped[reelIndex]
-                          ? "radial-gradient(ellipse at center, rgba(139,92,246,0.06) 0%, transparent 70%)"
-                          : "radial-gradient(ellipse at center, rgba(139,92,246,0.12) 0%, transparent 70%)",
+                          ? "radial-gradient(ellipse at center, rgba(220,38,38,0.06) 0%, transparent 70%)"
+                          : "radial-gradient(ellipse at center, rgba(220,38,38,0.12) 0%, transparent 70%)",
                       }}
                     >
                       {renderReelStrip(reelIndex)}
@@ -457,7 +457,7 @@ export default function SlotsPage() {
                               boxShadow:
                                 lastResult.multiplier >= 15
                                   ? "inset 0 0 30px rgba(212,175,55,0.3)"
-                                  : "inset 0 0 20px rgba(139,92,246,0.2)",
+                                  : "inset 0 0 20px rgba(220,38,38,0.2)",
                             }}
                           />
                         )}
@@ -588,7 +588,7 @@ export default function SlotsPage() {
                   }`}
                   style={{
                     background: spinning
-                      ? "linear-gradient(135deg, #4a3a6a, #3a2a5a)"
+                      ? "linear-gradient(135deg, #5a1a1a, #3a0a0a)"
                       : "linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%)",
                     color: spinning ? "#888" : "var(--casino-darker)",
                     boxShadow: spinning
@@ -698,7 +698,7 @@ export default function SlotsPage() {
                         multiplier >= 50
                           ? "text-[var(--gold)]"
                           : multiplier >= 15
-                            ? "text-purple-400"
+                            ? "text-red-400"
                             : multiplier >= 8
                               ? "text-blue-400"
                               : "text-gray-400"

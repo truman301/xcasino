@@ -811,7 +811,7 @@ export default function BlackjackPage() {
               {playerCanSplit && (
                 <button
                   onClick={split}
-                  className="px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider bg-gradient-to-r from-purple-700 to-purple-600 border border-purple-500 hover:from-purple-600 hover:to-purple-500 transition-all hover:scale-105 active:scale-95 text-white shadow-lg"
+                  className="px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider bg-gradient-to-r from-red-800 to-red-700 border border-red-500 hover:from-red-700 hover:to-red-600 transition-all hover:scale-105 active:scale-95 text-white shadow-lg"
                 >
                   Split
                 </button>

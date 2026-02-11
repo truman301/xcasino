@@ -18,9 +18,9 @@ export default function PlayingCard({ card, size = "md", className = "" }: Playi
   if (!card.faceUp) {
     return (
       <div
-        className={`${sizes[size]} rounded-lg border-2 border-gray-600 bg-gradient-to-br from-blue-900 to-blue-800 flex items-center justify-center shadow-lg ${className}`}
+        className={`${sizes[size]} rounded-lg border border-[var(--gold)]/20 bg-gradient-to-br from-[#1a0a0a] via-[#0f0f18] to-[#1a0a0a] flex items-center justify-center shadow-lg shadow-black/40 ${className}`}
       >
-        <div className="text-2xl opacity-50">🂠</div>
+        <div className="text-lg font-black text-[var(--gold)]/20 select-none">✦</div>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export default function PlayingCard({ card, size = "md", className = "" }: Playi
 
   return (
     <div
-      className={`${sizes[size]} rounded-lg border-2 border-gray-300 bg-white flex flex-col justify-between p-1 shadow-lg select-none ${className}`}
+      className={`${sizes[size]} rounded-lg border border-gray-200 bg-gradient-to-br from-white to-gray-50 flex flex-col justify-between p-1 shadow-lg shadow-black/30 select-none ${className}`}
     >
       <div className={`text-left leading-none font-bold ${red ? "text-red-600" : "text-gray-900"}`}>
         <div className="text-xs">{card.rank}</div>
