@@ -16,7 +16,8 @@ type ChipValue = (typeof CHIP_VALUES)[number];
 
 // Standard European roulette wheel order (clockwise from 0)
 const WHEEL_ORDER = [0,26,3,35,12,28,7,29,18,22,9,31,14,20,1,33,16,24,5,10,23,8,30,11,36,13,27,6,34,17,25,2,21,4,19,15,32];
-const SECTOR_ANGLE = 360 / 37;
+const NUM_POCKETS = 37;
+const SECTOR_ANGLE = 360 / NUM_POCKETS;
 
 // The three columns on a standard roulette layout
 const COLUMN_1 = [1,4,7,10,13,16,19,22,25,28,31,34];
@@ -24,9 +25,9 @@ const COLUMN_2 = [2,5,8,11,14,17,20,23,26,29,32,35];
 const COLUMN_3 = [3,6,9,12,15,18,21,24,27,30,33,36];
 
 const TABLE_ROWS: number[][] = [
-  COLUMN_3, // top row visually
-  COLUMN_2, // middle row
-  COLUMN_1, // bottom row
+  COLUMN_3,
+  COLUMN_2,
+  COLUMN_1,
 ];
 
 type BetType =
@@ -110,7 +111,7 @@ function getPayout(bt: BetType): number {
 }
 
 // ---------------------------------------------------------------------------
-// Number color styling helpers
+// Table styling helpers
 // ---------------------------------------------------------------------------
 
 function numberBg(n: number): string {
@@ -135,7 +136,7 @@ function getWheelColor(n: number): string {
   const c = getNumberColor(n);
   if (c === "green") return "#0d7a36";
   if (c === "red") return "#b91c1c";
-  return "#1a1a2e";
+  return "#18182b";
 }
 
 function buildConicGradient(): string {
@@ -149,18 +150,19 @@ function buildConicGradient(): string {
   return `conic-gradient(from 0deg, ${stops.join(", ")})`;
 }
 
-function buildDividerGradient(): string {
+function buildFretGradient(): string {
+  // Thin gold lines at each sector boundary
   const stops: string[] = [];
-  WHEEL_ORDER.forEach((_, i) => {
+  for (let i = 0; i < NUM_POCKETS; i++) {
     const deg = i * SECTOR_ANGLE;
-    const before = deg - 0.3;
-    const after = deg + 0.3;
-    if (i > 0) {
-      stops.push(`transparent ${before.toFixed(4)}deg`);
-    }
-    stops.push(`rgba(212,175,55,0.6) ${deg.toFixed(4)}deg`);
-    stops.push(`transparent ${after.toFixed(4)}deg`);
-  });
+    const b = deg - 0.4;
+    const a = deg + 0.4;
+    if (i > 0) stops.push(`transparent ${b.toFixed(4)}deg`);
+    stops.push(`rgba(184,150,12,0.7) ${(deg - 0.15).toFixed(4)}deg`);
+    stops.push(`rgba(240,208,96,0.9) ${deg.toFixed(4)}deg`);
+    stops.push(`rgba(184,150,12,0.7) ${(deg + 0.15).toFixed(4)}deg`);
+    stops.push(`transparent ${a.toFixed(4)}deg`);
+  }
   return `conic-gradient(from 0deg, transparent 0deg, ${stops.join(", ")}, transparent 360deg)`;
 }
 
@@ -170,7 +172,7 @@ function getWinningAngle(winningNumber: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Ball animation (requestAnimationFrame-based for 60fps)
+// Ball animation (requestAnimationFrame for 60fps, DOM ref for performance)
 // ---------------------------------------------------------------------------
 
 function animateBall(
@@ -187,25 +189,24 @@ function animateBall(
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
 
-    // Custom ease-out: fast start, slow end
+    // Ease-out: fast start, slow end
     const eased = 1 - Math.pow(1 - progress, 3.5);
 
-    // Ball angle
     const currentAngle = totalBallRotation * eased;
 
-    // Radius: starts outer, spirals in during last 60%
-    const spiralStart = 0.35;
+    // Spiral inward during last 65%
     let currentRadius = outerRadius;
+    const spiralStart = 0.35;
     if (progress > spiralStart) {
       const spiralProgress = (progress - spiralStart) / (1 - spiralStart);
       const spiralEased = spiralProgress * spiralProgress;
       currentRadius = outerRadius - (outerRadius - innerRadius) * spiralEased;
     }
 
-    // Small bounce at the very end (last 8%)
+    // Small bounce in the last 8%
     if (progress > 0.92) {
-      const bounceProgress = (progress - 0.92) / 0.08;
-      const bounce = Math.sin(bounceProgress * Math.PI * 4) * 4 * (1 - bounceProgress);
+      const bp = (progress - 0.92) / 0.08;
+      const bounce = Math.sin(bp * Math.PI * 4) * 3.5 * (1 - bp);
       currentRadius += bounce;
     }
 
@@ -214,7 +215,6 @@ function animateBall(
     if (progress < 1) {
       requestAnimationFrame(frame);
     } else {
-      // Ensure final position is exact
       ballEl.style.transform = `rotate(${totalBallRotation}deg) translateY(-${innerRadius}px)`;
       onComplete();
     }
@@ -224,7 +224,7 @@ function animateBall(
 }
 
 // ---------------------------------------------------------------------------
-// Chip badge for showing bet amounts on the layout
+// Chip badge
 // ---------------------------------------------------------------------------
 
 function ChipBadge({ amount }: { amount: number }) {
@@ -236,108 +236,172 @@ function ChipBadge({ amount }: { amount: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Roulette Wheel Component
+// Roulette Wheel Component — realistic physical design
 // ---------------------------------------------------------------------------
+
+const WHEEL_SIZE = 320;
+const FRAME_PAD = 16;
+const TRACK_PAD = 8;
+const FRET_PAD = 4;
+const TOTAL_SIZE = WHEEL_SIZE + (FRAME_PAD + TRACK_PAD + FRET_PAD) * 2;
+
+// Radii for ball orbit
+const BALL_TRACK_RADIUS = WHEEL_SIZE / 2 + FRET_PAD + TRACK_PAD / 2;
+const BALL_POCKET_RADIUS = WHEEL_SIZE / 2 - 24;
+
+// 8 diamond deflectors evenly spaced
+const DEFLECTOR_POSITIONS = Array.from({ length: 8 }, (_, i) => i * 45);
 
 function RouletteWheel({
   wheelScope,
   ballRef,
-  showBall,
   result,
   spinning,
 }: {
   wheelScope: React.RefObject<HTMLDivElement | null>;
   ballRef: React.RefObject<HTMLDivElement | null>;
-  showBall: boolean;
   result: number | null;
   spinning: boolean;
 }) {
   const conicGradient = useMemo(() => buildConicGradient(), []);
-  const dividerGradient = useMemo(() => buildDividerGradient(), []);
+  const fretGradient = useMemo(() => buildFretGradient(), []);
 
-  // Wheel size: 300px desktop, 250px mobile
-  const wheelSize = 300;
-  const numberRadius = wheelSize / 2 - 32; // Place numbers inside the sectors
+  const numberRadius = WHEEL_SIZE / 2 - 36;
+  const centerSize = WHEEL_SIZE * 0.3;
 
   return (
-    <div className="relative flex items-center justify-center">
-      {/* Gold marker triangle at top */}
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: TOTAL_SIZE, height: TOTAL_SIZE }}
+    >
+      {/* Gold pointer at top */}
       <div className="roulette-marker" />
 
-      {/* Outer gold ring */}
+      {/* Mahogany frame */}
       <div
-        className={`roulette-outer-ring ${result !== null && !spinning ? "roulette-win-glow" : ""}`}
-        style={{ width: wheelSize + 28, height: wheelSize + 28 }}
+        className={`roulette-frame ${result !== null && !spinning ? "roulette-win-glow" : ""}`}
+        style={{ width: TOTAL_SIZE, height: TOTAL_SIZE }}
       >
-        {/* Inner chrome ring */}
+        {/* Ball track (metallic groove) */}
         <div
-          className="roulette-inner-ring"
-          style={{ width: wheelSize + 8, height: wheelSize + 8 }}
+          className="roulette-ball-track"
+          style={{
+            width: TOTAL_SIZE - FRAME_PAD * 2,
+            height: TOTAL_SIZE - FRAME_PAD * 2,
+            position: "relative",
+          }}
         >
-          {/* Spinning wheel body */}
-          <motion.div
-            ref={wheelScope}
-            className="roulette-wheel"
-            style={{ width: wheelSize, height: wheelSize }}
+          {/* Diamond deflectors on the ball track */}
+          {DEFLECTOR_POSITIONS.map((angle) => {
+            const r = (TOTAL_SIZE - FRAME_PAD * 2) / 2 - 3;
+            const rad = (angle - 90) * (Math.PI / 180);
+            const cx = (TOTAL_SIZE - FRAME_PAD * 2) / 2;
+            return (
+              <div
+                key={angle}
+                className="roulette-deflector"
+                style={{
+                  left: cx + r * Math.cos(rad) - 5,
+                  top: cx + r * Math.sin(rad) - 5,
+                }}
+              />
+            );
+          })}
+
+          {/* Gold fret ring */}
+          <div
+            className="roulette-fret-ring"
+            style={{
+              width: TOTAL_SIZE - (FRAME_PAD + TRACK_PAD) * 2,
+              height: TOTAL_SIZE - (FRAME_PAD + TRACK_PAD) * 2,
+            }}
           >
-            {/* Colored sectors */}
-            <div
-              className="absolute inset-0 rounded-full"
-              style={{ background: conicGradient }}
-            />
-
-            {/* Sector divider lines */}
-            <div
-              className="roulette-dividers"
-              style={{ background: dividerGradient }}
-            />
-
-            {/* Number labels */}
-            {WHEEL_ORDER.map((num, i) => {
-              const angle = i * SECTOR_ANGLE + SECTOR_ANGLE / 2;
-              return (
-                <span
-                  key={num}
-                  className="roulette-number"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    marginTop: -11,
-                    marginLeft: -11,
-                    transform: `rotate(${angle}deg) translateY(-${numberRadius}px) rotate(-${angle}deg)`,
-                  }}
-                >
-                  {num}
-                </span>
-              );
-            })}
-
-            {/* Center hub */}
-            <div
-              className="roulette-center"
-              style={{
-                width: wheelSize * 0.28,
-                height: wheelSize * 0.28,
-              }}
+            {/* Spinning wheel */}
+            <motion.div
+              ref={wheelScope}
+              className="roulette-wheel"
+              style={{ width: WHEEL_SIZE, height: WHEEL_SIZE }}
             >
-              <span className="text-[var(--gold)] font-black text-[10px] tracking-wider select-none">
-                CASINO X
-              </span>
-            </div>
-          </motion.div>
+              {/* Colored pockets */}
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{ background: conicGradient }}
+              />
 
-          {/* Ball — positioned relative to the wheel container, NOT inside the rotating wheel */}
-          {showBall && (
-            <div
-              ref={ballRef}
-              className={`roulette-ball ${spinning ? "roulette-ball-spinning" : ""}`}
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-              }}
-            />
-          )}
+              {/* Fret dividers */}
+              <div
+                className="roulette-dividers"
+                style={{ background: fretGradient }}
+              />
+
+              {/* Pocket depth shadow — inner ring */}
+              <div
+                className="roulette-pocket-shadow"
+                style={{
+                  top: 20,
+                  left: 20,
+                  right: 20,
+                  bottom: 20,
+                  background: "transparent",
+                }}
+              />
+
+              {/* Number labels */}
+              {WHEEL_ORDER.map((num, i) => {
+                const angle = i * SECTOR_ANGLE + SECTOR_ANGLE / 2;
+                return (
+                  <span
+                    key={num}
+                    className="roulette-number"
+                    style={{
+                      width: 22,
+                      height: 22,
+                      marginTop: -11,
+                      marginLeft: -11,
+                      transform: `rotate(${angle}deg) translateY(-${numberRadius}px) rotate(-${angle}deg)`,
+                    }}
+                  >
+                    {num}
+                  </span>
+                );
+              })}
+
+              {/* Center cone — gold brass hub */}
+              <div
+                className="roulette-center"
+                style={{ width: centerSize, height: centerSize }}
+              >
+                <div
+                  className="roulette-center-outer"
+                  style={{ width: centerSize - 4, height: centerSize - 4 }}
+                >
+                  <div
+                    className="roulette-center-inner"
+                    style={{ width: centerSize - 10, height: centerSize - 10 }}
+                  >
+                    <span className="text-[#1a0e00] font-black text-[9px] tracking-widest select-none drop-shadow-[0_1px_0_rgba(255,255,255,0.3)]">
+                      CASINO X
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3D lighting overlay */}
+              <div className="roulette-light-overlay" />
+            </motion.div>
+          </div>
+
+          {/* Ball — lives in ball-track layer, NOT inside the spinning wheel */}
+          <div
+            ref={ballRef}
+            className={`roulette-ball ${spinning ? "roulette-ball-spinning" : ""}`}
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: `rotate(0deg) translateY(-${BALL_TRACK_RADIUS}px)`,
+            }}
+          />
         </div>
       </div>
     </div>
@@ -358,7 +422,6 @@ export default function RoulettePage() {
   const [history, setHistory] = useState<number[]>([]);
   const [message, setMessage] = useState<string>("");
   const [lastWin, setLastWin] = useState<number>(0);
-  const [showBall, setShowBall] = useState(false);
 
   const [wheelScope, wheelAnimate] = useAnimate<HTMLDivElement>();
   const ballRef = useRef<HTMLDivElement>(null);
@@ -419,67 +482,48 @@ export default function RoulettePage() {
     setMessage("");
     setResult(null);
     setLastWin(0);
-    setShowBall(true);
 
     const winningNumber = Math.floor(Math.random() * 37);
-    const spinDuration = 4500 + Math.random() * 1000; // 4.5-5.5 seconds
+    const spinDuration = 4500 + Math.random() * 1500; // 4.5-6 seconds
 
-    // Calculate the target angle for the winning number
     const winAngle = getWinningAngle(winningNumber);
 
-    // Wheel spins clockwise (negative direction), 3-5 full rotations
+    // Wheel rotates negative (clockwise visually when CSS rotation is negative)
     const wheelExtraRotations = 360 * (3 + Math.floor(Math.random() * 3));
-    // The wheel must stop so that the winning sector is under the marker (top, 0°).
-    // If the wheel rotates by W degrees clockwise, the sector at angle S on the wheel
-    // will be at the top when W ≡ S (mod 360). But we spin CW = negative.
-    // So: finalWheelRotation = previousRotation - (wheelExtraRotations + winAngle)
-    // Then the sector at `winAngle` on the wheel is at 0° (top/marker).
     const targetWheelRotation = cumulativeRotationRef.current - (wheelExtraRotations + winAngle);
 
-    // Ball spins in opposite direction (counter-clockwise from ball's perspective,
-    // which means positive rotation). It does 5-7 full orbits.
-    const ballOrbits = 5 + Math.floor(Math.random() * 3);
-    // The ball must also end up at the top (0° in viewport) to land in the pocket
-    // that the marker points to. Since the ball's transform is independent of the
-    // wheel's rotation, it just needs to end at 0° (or 360°*n).
-    // We'll actually make it end at a tiny offset (0°) which is the marker position.
-    const totalBallRotation = 360 * ballOrbits; // ends at 0° effectively (full rotations)
+    // Ball does 5-8 full orbits, ends at 0° (top = marker position)
+    const ballOrbits = 5 + Math.floor(Math.random() * 4);
+    const totalBallRotation = 360 * ballOrbits;
 
-    // Wheel radius for ball orbit
-    const wheelRadius = 150; // half of 300px wheel
-    const outerBallRadius = wheelRadius - 8;
-    const innerBallRadius = wheelRadius - 38; // lands in the pocket area
-
-    // Reset ball position to top
+    // Reset ball to outer track
     if (ballRef.current) {
-      ballRef.current.style.transform = `rotate(0deg) translateY(-${outerBallRadius}px)`;
+      ballRef.current.style.transform = `rotate(0deg) translateY(-${BALL_TRACK_RADIUS}px)`;
     }
 
-    // Start wheel animation
+    // Animate wheel
     wheelAnimate(
       wheelScope.current!,
       { rotate: targetWheelRotation },
       {
         duration: spinDuration / 1000,
-        ease: [0.15, 0.85, 0.25, 1], // dramatic ease-out
+        ease: [0.12, 0.8, 0.2, 1],
       }
     );
 
-    // Start ball animation
+    // Animate ball
     if (ballRef.current) {
       animateBall(
         spinDuration,
         totalBallRotation,
-        outerBallRadius,
-        innerBallRadius,
+        BALL_TRACK_RADIUS,
+        BALL_POCKET_RADIUS,
         ballRef.current,
         () => {
-          // Animation complete — resolve the game
           cumulativeRotationRef.current = targetWheelRotation;
-
           setResult(winningNumber);
 
-          // Calculate winnings (unchanged logic)
+          // Calculate winnings
           let totalWinnings = 0;
           bets.forEach((bet) => {
             if (doesBetWin(bet.type, winningNumber)) {
@@ -505,7 +549,7 @@ export default function RoulettePage() {
   }, [spinning, bets, addChips, wheelAnimate, wheelScope]);
 
   // -------------------------------------------------------------------------
-  // Helpers for rendering bet amounts on layout cells
+  // Bet amount helper
   // -------------------------------------------------------------------------
 
   const getBetAmount = (bt: BetType): number => {
@@ -536,13 +580,12 @@ export default function RoulettePage() {
 
       {/* Wheel Section */}
       <div className="max-w-6xl mx-auto px-4 mb-6">
-        <div className="glass rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden">
+        <div className="rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 40%, rgba(15,15,24,0.95), rgba(5,5,8,0.98))" }}>
           {/* The Wheel */}
-          <div className="mb-4 scale-[0.85] md:scale-100 origin-center">
+          <div className="mb-4 scale-[0.78] sm:scale-[0.85] md:scale-100 origin-center">
             <RouletteWheel
               wheelScope={wheelScope}
               ballRef={ballRef}
-              showBall={showBall}
               result={result}
               spinning={spinning}
             />
@@ -552,7 +595,7 @@ export default function RoulettePage() {
           {result !== null && !spinning && (
             <div className="animate-fade-in mb-3 flex items-center gap-3">
               <div
-                className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-black text-white border-2 ${
+                className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-black text-white border-2 shadow-lg ${
                   getNumberColor(result) === "green"
                     ? "bg-green-700 border-green-400"
                     : getNumberColor(result) === "red"
@@ -581,11 +624,11 @@ export default function RoulettePage() {
           {spinning && (
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 bg-[var(--gold)] rounded-full animate-pulse" />
-              <span className="text-sm text-gray-300">No more bets...</span>
+              <span className="text-sm text-gray-400 italic">No more bets...</span>
             </div>
           )}
 
-          {/* Non-spinning, non-result message */}
+          {/* Error messages */}
           {message && !spinning && result === null && (
             <p className="text-sm text-red-400 mb-3 animate-fade-in">{message}</p>
           )}
@@ -612,7 +655,6 @@ export default function RoulettePage() {
       {/* Chip selector + action buttons */}
       <div className="max-w-6xl mx-auto px-4 mb-4">
         <div className="flex flex-wrap items-center gap-3 justify-between">
-          {/* Chip selection */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400 mr-1">Bet:</span>
             {CHIP_VALUES.map((val) => (
@@ -630,8 +672,6 @@ export default function RoulettePage() {
               </button>
             ))}
           </div>
-
-          {/* Actions */}
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-400">
               Total bet: <span className="text-white font-bold">{totalBet().toLocaleString()}</span>
@@ -657,11 +697,9 @@ export default function RoulettePage() {
       {/* Roulette table layout */}
       <div className="max-w-6xl mx-auto px-4">
         <div className="felt-texture rounded-2xl border border-green-900/50 p-4 md:p-6 overflow-x-auto">
-          {/* The grid table */}
           <div className="min-w-[700px]">
             {/* Zero + Number grid */}
             <div className="flex gap-[2px]">
-              {/* Zero cell spanning 3 rows */}
               <div className="flex-shrink-0">
                 <button
                   onClick={() => placeBet({ kind: "straight", number: 0 })}
@@ -674,8 +712,6 @@ export default function RoulettePage() {
                   )}
                 </button>
               </div>
-
-              {/* 12 columns x 3 rows of numbers */}
               <div className="flex-1 grid grid-rows-3 gap-[2px]">
                 {TABLE_ROWS.map((row, rowIdx) => (
                   <div key={rowIdx} className="grid grid-cols-12 gap-[2px]">
@@ -696,8 +732,6 @@ export default function RoulettePage() {
                   </div>
                 ))}
               </div>
-
-              {/* Column bets (right side) */}
               <div className="flex-shrink-0 grid grid-rows-3 gap-[2px]">
                 {([3, 2, 1] as const).map((col) => {
                   const amt = getBetAmount({ kind: "column", column: col });
@@ -716,7 +750,7 @@ export default function RoulettePage() {
               </div>
             </div>
 
-            {/* Dozens row */}
+            {/* Dozens */}
             <div className="flex gap-[2px] mt-[2px]">
               <div className="w-14 flex-shrink-0" />
               {([1, 2, 3] as const).map((d) => {
@@ -737,57 +771,15 @@ export default function RoulettePage() {
               <div className="w-14 flex-shrink-0" />
             </div>
 
-            {/* Outside bets row: 1-18, Even, Red, Black, Odd, 19-36 */}
+            {/* Outside bets */}
             <div className="flex gap-[2px] mt-[2px]">
               <div className="w-14 flex-shrink-0" />
-              <OutsideBetButton
-                label="1-18"
-                betType={{ kind: "low" }}
-                getBetAmount={getBetAmount}
-                placeBet={placeBet}
-                spinning={spinning}
-                extraClass="bg-[var(--casino-green)]/40 border-green-700/50"
-              />
-              <OutsideBetButton
-                label="EVEN"
-                betType={{ kind: "even" }}
-                getBetAmount={getBetAmount}
-                placeBet={placeBet}
-                spinning={spinning}
-                extraClass="bg-[var(--casino-green)]/40 border-green-700/50"
-              />
-              <OutsideBetButton
-                label="RED"
-                betType={{ kind: "red" }}
-                getBetAmount={getBetAmount}
-                placeBet={placeBet}
-                spinning={spinning}
-                extraClass="bg-[var(--casino-red)] border-red-700/50"
-              />
-              <OutsideBetButton
-                label="BLACK"
-                betType={{ kind: "black" }}
-                getBetAmount={getBetAmount}
-                placeBet={placeBet}
-                spinning={spinning}
-                extraClass="bg-[#1a1a2e] border-gray-600/50"
-              />
-              <OutsideBetButton
-                label="ODD"
-                betType={{ kind: "odd" }}
-                getBetAmount={getBetAmount}
-                placeBet={placeBet}
-                spinning={spinning}
-                extraClass="bg-[var(--casino-green)]/40 border-green-700/50"
-              />
-              <OutsideBetButton
-                label="19-36"
-                betType={{ kind: "high" }}
-                getBetAmount={getBetAmount}
-                placeBet={placeBet}
-                spinning={spinning}
-                extraClass="bg-[var(--casino-green)]/40 border-green-700/50"
-              />
+              <OutsideBetButton label="1-18" betType={{ kind: "low" }} getBetAmount={getBetAmount} placeBet={placeBet} spinning={spinning} extraClass="bg-[var(--casino-green)]/40 border-green-700/50" />
+              <OutsideBetButton label="EVEN" betType={{ kind: "even" }} getBetAmount={getBetAmount} placeBet={placeBet} spinning={spinning} extraClass="bg-[var(--casino-green)]/40 border-green-700/50" />
+              <OutsideBetButton label="RED" betType={{ kind: "red" }} getBetAmount={getBetAmount} placeBet={placeBet} spinning={spinning} extraClass="bg-[var(--casino-red)] border-red-700/50" />
+              <OutsideBetButton label="BLACK" betType={{ kind: "black" }} getBetAmount={getBetAmount} placeBet={placeBet} spinning={spinning} extraClass="bg-[#1a1a2e] border-gray-600/50" />
+              <OutsideBetButton label="ODD" betType={{ kind: "odd" }} getBetAmount={getBetAmount} placeBet={placeBet} spinning={spinning} extraClass="bg-[var(--casino-green)]/40 border-green-700/50" />
+              <OutsideBetButton label="19-36" betType={{ kind: "high" }} getBetAmount={getBetAmount} placeBet={placeBet} spinning={spinning} extraClass="bg-[var(--casino-green)]/40 border-green-700/50" />
               <div className="w-14 flex-shrink-0" />
             </div>
           </div>
@@ -806,9 +798,7 @@ export default function RoulettePage() {
                   className="flex items-center gap-2 bg-[var(--casino-card)] border border-[var(--casino-border)] rounded-lg px-3 py-1.5 text-sm"
                 >
                   <span className="text-gray-300">{betLabel(bet.type)}</span>
-                  <span className="text-[var(--gold)] font-bold">
-                    {bet.amount.toLocaleString()}
-                  </span>
+                  <span className="text-[var(--gold)] font-bold">{bet.amount.toLocaleString()}</span>
                 </div>
               ))}
             </div>
@@ -839,12 +829,7 @@ export default function RoulettePage() {
 // ---------------------------------------------------------------------------
 
 function OutsideBetButton({
-  label,
-  betType,
-  getBetAmount,
-  placeBet,
-  spinning,
-  extraClass,
+  label, betType, getBetAmount, placeBet, spinning, extraClass,
 }: {
   label: string;
   betType: BetType;
