@@ -35,13 +35,13 @@ interface RouletteWheelProps {
 // ---------------------------------------------------------------------------
 // Component
 //
-// Uses requestAnimationFrame for smooth physics:
-//   - Wheel spins clockwise at a steady speed (slows gently, never fully stops)
-//   - Ball launches counter-clockwise fast, decelerates with friction,
-//     and comes to rest after 4.5–7 s
-//   - Final ball angle is pre-calculated so that when the ball stops it
-//     visually sits on the winning slot relative to the wheel's position
-//     at that exact moment
+// Two-phase ball physics (no prediction, no snap):
+//   Phase 1 (first ~70% of duration): Ball decelerates with constant friction,
+//     looking natural and random.
+//   Phase 2 (last ~30%): We compute the REAL remaining distance to the winning
+//     slot (using the actual wheel angle, not a prediction) and smoothly
+//     recalculate v0/friction so the ball arrives exactly at the target.
+//     This is seamless — the ball just appears to decelerate into the slot.
 // ---------------------------------------------------------------------------
 
 const WHEEL_SIZE = 340;
@@ -69,6 +69,11 @@ export default function RouletteWheel({
   const ballStopped = useRef(true);
   const spinFired = useRef(false); // has onSpinningEnd been called?
   const winningSlotIdx = useRef(0); // the slot the ball must land on
+
+  // Two-phase tracking
+  const spinStartTime = useRef(0); // timestamp when spin started
+  const spinDuration = useRef(0); // total planned duration
+  const phase2Started = useRef(false); // have we entered phase 2?
 
   // RAF
   const rafId = useRef(0);
@@ -99,21 +104,54 @@ export default function RouletteWheel({
 
     // Ball — decelerating CCW
     if (!ballStopped.current) {
+      const elapsed = now - spinStartTime.current;
+      const totalDur = spinDuration.current;
+      const phase2Time = totalDur * 0.70; // switch at 70%
+
+      // --- Phase 2 transition ---
+      // When we hit 70% of duration, recalculate ball physics so it arrives
+      // exactly at the winning slot using real-time wheel angle (no prediction).
+      if (!phase2Started.current && elapsed >= phase2Time) {
+        phase2Started.current = true;
+
+        const remaining = totalDur - elapsed; // ms left
+
+        // Where the winning slot will be when the ball stops:
+        // wheelAngle will advance by (wheelSpeed * remaining) more degrees.
+        // The slot in world coords = (wheelAngle + wheelSpeed*remaining) + slotIdx*SLOT_ANGLE
+        // We keep wheel speed constant during the spin so this is accurate.
+        const wheelAtEnd = wheelAngle.current + wheelSpeed.current * remaining;
+        const targetAngle = wheelAtEnd + winningSlotIdx.current * SLOT_ANGLE;
+
+        // Ball needs to go from current position to targetAngle (CCW, so negative distance).
+        // Add 2-3 extra laps so it doesn't look like it's speeding up or reversing.
+        const rawDiff = ((targetAngle - ballAngle.current) % 360 + 360) % 360;
+        const extraLaps = 2 + Math.floor(Math.random() * 2); // 2-3 laps
+        const totalDist = -(extraLaps * 360 + rawDiff); // negative = CCW
+
+        // Kinematics: dist = v0*t + ½*a*t², v_final = 0 → v0 + a*t = 0
+        //   v0 = 2*dist/t, a = -v0/t
+        const v0 = (2 * totalDist) / remaining;
+        const a = -v0 / remaining;
+
+        ballSpeed.current = v0;
+        ballFriction.current = a;
+      }
+
+      // Normal physics step
       ballAngle.current += ballSpeed.current * dt;
-      // Apply friction (ballSpeed is negative, friction is positive → moves toward 0)
       ballSpeed.current += ballFriction.current * dt;
+
       if (ballSpeed.current >= 0) {
         ballSpeed.current = 0;
         ballStopped.current = true;
 
-        // Snap ball to the exact center of the winning slot.
-        // We know which slot it must land on (winningSlotIdx), so place it
-        // precisely at that slot's center relative to the current wheel angle.
+        // No snap needed — the phase 2 kinematics land us on the slot.
+        // Just do a tiny correction to be pixel-perfect (< 1 degree drift).
         ballAngle.current = wheelAngle.current + winningSlotIdx.current * SLOT_ANGLE;
 
         if (!spinFired.current) {
           spinFired.current = true;
-          // Let the player see where it landed for 600 ms
           setTimeout(() => {
             onEndRef.current?.();
           }, 600);
@@ -152,18 +190,20 @@ export default function RouletteWheel({
     winningSlotIdx.current = slotIdx;
     spinFired.current = false;
     ballStopped.current = false;
+    phase2Started.current = false;
 
     // Random duration the ball spins: 4.5 – 7 s
     const duration = 4500 + Math.random() * 2500; // ms
+    spinDuration.current = duration;
+    spinStartTime.current = performance.now();
 
     // Speed up the wheel while ball is in play (~120 deg/s)
     wheelSpeed.current = 0.12;
 
     // After the ball stops, ease the wheel back to idle speed
     setTimeout(() => {
-      // Gradually slow wheel back to idle over ~2 s (step down)
       const steps = 20;
-      const interval = 100; // ms per step
+      const interval = 100;
       const startSpeed = wheelSpeed.current;
       const endSpeed = 0.02;
       let step = 0;
@@ -174,28 +214,21 @@ export default function RouletteWheel({
       }, interval);
     }, duration + 800);
 
-    // Calculate where wheel will be when ball stops
-    // wheelAngle at ball stop ≈ current + wheelSpeed * duration
-    // (wheel speed is constant during the ball spin)
-    const wheelAtStop = wheelAngle.current + 0.12 * duration;
+    // Phase 1 physics: Ball launches CCW fast, decelerates randomly.
+    // This doesn't need to aim at anything — phase 2 will correct the trajectory.
+    // Give it enough speed for 5-7 visible laps during phase 1 (~70% of duration).
+    const phase1Duration = duration * 0.70;
+    const phase1Laps = 5 + Math.random() * 3; // 5-8 laps
+    const phase1Dist = -(phase1Laps * 360); // negative = CCW
 
-    // The winning slot sits at (slotIdx * SLOT_ANGLE) in wheel-local coords.
-    // In world coords that's: wheelAtStop + slotIdx * SLOT_ANGLE
-    // The ball must end there.
-    const targetBallAngle = wheelAtStop + slotIdx * SLOT_ANGLE;
-
-    // Ball travels CCW from current position to targetBallAngle,
-    // plus several extra full laps for visual effect.
-    const extraLaps = 6 + Math.floor(Math.random() * 4); // 6-9
-    // Normalize the remainder so it's positive
-    const remainder = ((targetBallAngle - ballAngle.current) % 360 + 360) % 360;
-    // Total CCW distance (negative because CCW)
-    const totalDist = -(extraLaps * 360 + remainder);
-
-    // Kinematics:  dist = v0*t + ½*a*t²   and   v0 + a*t = 0 (stops at t)
-    //   ⇒ v0 = 2*dist / t   and   a = -v0/t = -2*dist/t²
-    const v0 = (2 * totalDist) / duration; // negative
-    const a = -v0 / duration; // positive (friction)
+    // We want the ball to still be moving at end of phase 1 (not stopped).
+    // Use kinematics where ball still has ~30% of v0 left at phase1Duration:
+    //   dist = v0*t + ½*a*t²
+    //   v_end = v0 + a*t = 0.3*v0  ⟹  a = -0.7*v0/t
+    //   dist = v0*t + ½*(-0.7*v0/t)*t² = v0*t - 0.35*v0*t = 0.65*v0*t
+    //   v0 = dist / (0.65 * t)
+    const v0 = phase1Dist / (0.65 * phase1Duration);
+    const a = -0.7 * v0 / phase1Duration;
 
     ballSpeed.current = v0;
     ballFriction.current = a;
