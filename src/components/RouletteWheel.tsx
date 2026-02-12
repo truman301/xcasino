@@ -34,6 +34,15 @@ interface RouletteWheelProps {
 
 // ---------------------------------------------------------------------------
 // Component
+//
+// How it works:
+//   - The wheel is one <div> that CSS-rotates.
+//   - The ball is drawn INSIDE the wheel SVG at the winning slot's position,
+//     so it always stays perfectly aligned with that slot.
+//   - We spin the wheel many full rotations plus an offset so the winning
+//     slot ends up at the top (12 o'clock).
+//   - Since the ball is part of the wheel, it spins with it and naturally
+//     ends up at the top too.
 // ---------------------------------------------------------------------------
 
 export default function RouletteWheel({
@@ -42,10 +51,8 @@ export default function RouletteWheel({
   onSpinningEnd,
 }: RouletteWheelProps) {
   const [spinning, setSpinning] = useState(false);
-  // wheelAngle is the cumulative rotation of the wheel (positive = clockwise)
   const [wheelAngle, setWheelAngle] = useState(0);
-  // ballAngle is the angle of the ball in world-space (separate from wheel)
-  const [ballAngle, setBallAngle] = useState(0);
+  const [ballSlotIdx, setBallSlotIdx] = useState(0); // which slot the ball sits on
   const prevStartRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -56,19 +63,6 @@ export default function RouletteWheel({
   const NUM_R = (OUTER_R + INNER_R) / 2;
   const BALL_R = OUTER_R * 0.85;
 
-  // The first slot ("0") is drawn centered at the top (12 o'clock = -90°).
-  // Slot i is at angle: i * SLOT_ANGLE degrees (measured clockwise from top).
-  // When the wheel rotates by W degrees clockwise, slot i's world position
-  // is at angle: i * SLOT_ANGLE + W.
-  //
-  // To make the ball land on slot S, we need:
-  //   ballAngle ≡ S * SLOT_ANGLE + wheelAngle   (mod 360)
-  //
-  // Strategy:
-  //   - Spin the wheel clockwise a bunch of times
-  //   - Spin the ball counter-clockwise a bunch of times, ending exactly
-  //     on the winning slot's world position.
-
   const triggerSpin = useCallback(() => {
     if (spinning) return;
     setSpinning(true);
@@ -76,29 +70,29 @@ export default function RouletteWheel({
     const slotIdx = WHEEL_SEQUENCE.indexOf(winningBet);
     if (slotIdx === -1) return;
 
-    // Wheel spins clockwise: add 5-8 full rotations
-    const wheelSpins = 5 + Math.random() * 3;
-    const newWheelAngle = wheelAngle + 360 * wheelSpins;
+    // Place the ball on the winning slot (relative to the wheel)
+    setBallSlotIdx(slotIdx);
 
-    // Ball target: the slot's world-space angle after the wheel stops
-    // Slot i is drawn at (i * SLOT_ANGLE) on the wheel graphic.
-    // After wheel rotates by newWheelAngle, slot i is at world angle:
-    //   slotWorldAngle = i * SLOT_ANGLE + newWheelAngle
-    // We want the ball to end up there.
-    const slotWorldAngle = slotIdx * SLOT_ANGLE + newWheelAngle;
+    // We need to rotate the wheel so that slot `slotIdx` ends up at the top.
+    // Slot i sits at angle (i * SLOT_ANGLE) on the unrotated wheel (slot 0 = top).
+    // To bring slot i to the top, we need to rotate the wheel by -(i * SLOT_ANGLE),
+    // i.e. counter-clockwise. But CSS rotate(positive) = clockwise visual rotation.
+    // So we need: finalAngle mod 360 == 360 - (slotIdx * SLOT_ANGLE)
+    //
+    // Add multiple full rotations for the spin effect.
+    const targetOffset = 360 - slotIdx * SLOT_ANGLE; // where the wheel must stop (mod 360)
+    const fullSpins = 5 + Math.floor(Math.random() * 4); // 5-8 full rotations
 
-    // Ball spins counter-clockwise: go backwards 7-10 full rotations,
-    // then land on slotWorldAngle.
-    const ballSpins = 7 + Math.random() * 3;
-    // Current ball angle -> target. Make it go counter-clockwise by subtracting.
-    // We need to end at slotWorldAngle (mod 360 doesn't matter for animation).
-    // Make sure we add enough backward spins to look like it's spinning opposite.
-    const newBallAngle = slotWorldAngle - 360 * ballSpins;
+    // Current angle mod 360
+    const currentMod = ((wheelAngle % 360) + 360) % 360;
+    // How much more we need to rotate from current position to reach targetOffset
+    let delta = targetOffset - currentMod;
+    if (delta < 0) delta += 360;
+
+    const newWheelAngle = wheelAngle + fullSpins * 360 + delta;
 
     setWheelAngle(newWheelAngle);
-    setBallAngle(newBallAngle);
 
-    // End after animation completes
     timerRef.current = setTimeout(() => {
       setSpinning(false);
       onSpinningEnd?.();
@@ -112,7 +106,6 @@ export default function RouletteWheel({
     prevStartRef.current = start;
   }, [start, triggerSpin]);
 
-  // Clean up timer
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -124,11 +117,8 @@ export default function RouletteWheel({
   // -------------------------------------------------------------------------
 
   const sectors = WHEEL_SEQUENCE.map((num, i) => {
-    // Each slot spans SLOT_ANGLE degrees, centered at i * SLOT_ANGLE from top
-    const slotCenter = i * SLOT_ANGLE; // degrees clockwise from top
+    const slotCenter = i * SLOT_ANGLE;
     const halfSlot = SLOT_ANGLE / 2;
-    // Convert to standard math angles (counterclockwise from right = 0)
-    // "top" in SVG = -90 degrees in math
     const startDeg = slotCenter - halfSlot - 90;
     const endDeg = slotCenter + halfSlot - 90;
     const startRad = (startDeg * Math.PI) / 180;
@@ -151,7 +141,6 @@ export default function RouletteWheel({
     const midRad = ((startDeg + endDeg) / 2) * (Math.PI / 180);
     const textX = CENTER + NUM_R * Math.cos(midRad);
     const textY = CENTER + NUM_R * Math.sin(midRad);
-    // Rotate text so it reads outward from center
     const textRotation = (startDeg + endDeg) / 2 + 90;
 
     const path = [
@@ -181,18 +170,18 @@ export default function RouletteWheel({
     );
   });
 
-  // Ball position: rendered at its angle relative to center
-  // We place it at BALL_R from center, at angle ballAngle - wheelAngle
-  // (because the ball SVG is inside the wheel div which already rotates).
-  // Actually, let's render the ball outside the wheel div so its position
-  // is in world-space.
-  const ballRad = ((ballAngle - 90) * Math.PI) / 180;
+  // -------------------------------------------------------------------------
+  // Ball position — relative to the wheel (drawn inside wheel SVG)
+  // -------------------------------------------------------------------------
+
+  const ballCenterDeg = ballSlotIdx * SLOT_ANGLE - 90; // -90 to convert from "top=0" to math coords
+  const ballRad = (ballCenterDeg * Math.PI) / 180;
   const ballX = CENTER + BALL_R * Math.cos(ballRad);
   const ballY = CENTER + BALL_R * Math.sin(ballRad);
 
   return (
     <div className="relative" style={{ width: WHEEL_SIZE, height: WHEEL_SIZE }}>
-      {/* Outer decorative ring (static) */}
+      {/* Outer decorative ring (static, doesn't spin) */}
       <svg
         width={WHEEL_SIZE}
         height={WHEEL_SIZE}
@@ -217,7 +206,7 @@ export default function RouletteWheel({
         />
       </svg>
 
-      {/* Spinning wheel (sectors + hub) */}
+      {/* Spinning wheel — sectors + hub + ball all rotate together */}
       <div
         className="absolute inset-0 z-10"
         style={{
@@ -229,6 +218,20 @@ export default function RouletteWheel({
       >
         <svg width={WHEEL_SIZE} height={WHEEL_SIZE}>
           {sectors}
+
+          {/* Ball — sits on the winning slot, rotates with wheel */}
+          <circle
+            cx={ballX}
+            cy={ballY}
+            r={6}
+            fill="#e8e8e8"
+            stroke="#bbb"
+            strokeWidth="1"
+            style={{
+              filter: "drop-shadow(0 0 4px rgba(255,255,255,0.9))",
+            }}
+          />
+
           {/* Center hub */}
           <circle cx={CENTER} cy={CENTER} r={INNER_R * 0.55} fill="#1a1018" />
           <circle
@@ -259,36 +262,6 @@ export default function RouletteWheel({
           </text>
         </svg>
       </div>
-
-      {/* Ball — world-space, animated independently */}
-      <svg
-        width={WHEEL_SIZE}
-        height={WHEEL_SIZE}
-        className="absolute inset-0 z-20 pointer-events-none"
-      >
-        <g
-          style={{
-            transformOrigin: `${CENTER}px ${CENTER}px`,
-            transform: `rotate(${ballAngle}deg)`,
-            transition: spinning
-              ? "transform 5s cubic-bezier(0.17, 0.67, 0.05, 0.99)"
-              : "none",
-          }}
-        >
-          {/* Ball drawn at "top" of the circle, rotation moves it */}
-          <circle
-            cx={CENTER}
-            cy={CENTER - BALL_R}
-            r={6}
-            fill="#e8e8e8"
-            stroke="#bbb"
-            strokeWidth="1"
-            style={{
-              filter: "drop-shadow(0 0 4px rgba(255,255,255,0.9))",
-            }}
-          />
-        </g>
-      </svg>
     </div>
   );
 }
