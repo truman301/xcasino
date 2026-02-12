@@ -112,6 +112,9 @@ export default function RouletteWheel({
           }, 600);
         }
       }
+    } else {
+      // Ball has stopped — lock it to the wheel so it moves with the number
+      ballAngle.current += wheelSpeed.current * dt;
     }
 
     // Write directly to DOM
