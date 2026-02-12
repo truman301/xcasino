@@ -3,25 +3,7 @@
 import { useState, useCallback } from "react";
 import { useChips } from "@/context/ChipContext";
 import { useSound } from "@/hooks/useSound";
-import dynamic from "next/dynamic";
-
-// Dynamic import for react-casino-roulette (client only)
-const RouletteWheelLib = dynamic(
-  () => import("react-casino-roulette").then((mod) => mod.RouletteWheel),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="flex items-center justify-center rounded-full"
-        style={{ width: 380, height: 380, background: "radial-gradient(circle, #0f0f18, #050508)" }}
-      >
-        <div className="text-gray-500 text-sm animate-pulse">Loading wheel...</div>
-      </div>
-    ),
-  }
-);
-
-import "react-casino-roulette/dist/index.css";
+import RouletteWheel from "@/components/RouletteWheel";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -326,7 +308,7 @@ export default function RoulettePage() {
         >
           {/* Casino Roulette Wheel */}
           <div className="mb-4">
-            <RouletteWheelLib
+            <RouletteWheel
               start={startSpin}
               winningBet={winningBet}
               onSpinningEnd={handleSpinEnd}
