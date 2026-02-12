@@ -23,6 +23,7 @@ interface Profile {
   is_admin: boolean;
   owned_cosmetics: string[];
   equipped_cosmetics: Record<string, string | null>;
+  created_at: string;
 }
 
 interface ChipContextType {
@@ -91,7 +92,7 @@ export function ChipProvider({ children }: { children: ReactNode }) {
   // Load profile from Supabase
   // ------------------------------------------------------------------
 
-  const loadProfile = useCallback(async (userId: string) => {
+  const loadProfile = useCallback(async (userId: string, authUser?: User | null) => {
     if (!isSupabaseConfigured) return;
     try {
       const { data, error } = await supabase
@@ -99,6 +100,45 @@ export function ChipProvider({ children }: { children: ReactNode }) {
         .select("*")
         .eq("id", userId)
         .single();
+
+      if (error && error.code === "PGRST116") {
+        // Profile doesn't exist yet (user signed up before schema was run).
+        // Auto-create one using username from auth metadata.
+        const metaUsername =
+          authUser?.user_metadata?.username ?? "Player";
+        const { data: newProfile, error: insertError } = await supabase
+          .from("profiles")
+          .insert({
+            id: userId,
+            username: metaUsername,
+            chips: 10000,
+            is_admin: false,
+            owned_cosmetics: [],
+            equipped_cosmetics: {},
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error("Error creating profile:", insertError);
+          return;
+        }
+        if (newProfile) {
+          setProfile({
+            id: newProfile.id as string,
+            username: newProfile.username as string,
+            chips: newProfile.chips as number,
+            is_admin: newProfile.is_admin as boolean,
+            owned_cosmetics: (newProfile.owned_cosmetics as string[]) ?? [],
+            equipped_cosmetics: (newProfile.equipped_cosmetics as Record<string, string | null>) ?? {},
+            created_at: newProfile.created_at as string,
+          });
+          setChips(newProfile.chips as number);
+          setOwnedCosmetics((newProfile.owned_cosmetics as string[]) ?? []);
+          setEquippedCosmetics((newProfile.equipped_cosmetics as Record<string, string | null>) ?? {});
+        }
+        return;
+      }
 
       if (error) {
         console.error("Error loading profile:", error);
@@ -113,6 +153,7 @@ export function ChipProvider({ children }: { children: ReactNode }) {
           is_admin: data.is_admin as boolean,
           owned_cosmetics: (data.owned_cosmetics as string[]) ?? [],
           equipped_cosmetics: (data.equipped_cosmetics as Record<string, string | null>) ?? {},
+          created_at: data.created_at as string,
         });
         setChips(data.chips as number);
         setOwnedCosmetics((data.owned_cosmetics as string[]) ?? []);
@@ -192,7 +233,7 @@ export function ChipProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        loadProfile(session.user.id);
+        loadProfile(session.user.id, session.user);
       }
       setLoading(false);
     });
@@ -205,7 +246,7 @@ export function ChipProvider({ children }: { children: ReactNode }) {
       setUser(currentUser);
 
       if (currentUser) {
-        loadProfile(currentUser.id);
+        loadProfile(currentUser.id, currentUser);
       } else {
         setProfile(null);
         setChips(10000);

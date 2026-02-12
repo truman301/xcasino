@@ -84,6 +84,9 @@ CREATE POLICY "Profiles are viewable by everyone" ON profiles
 CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 
+CREATE POLICY "Users can insert own profile" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
 -- Game history: users can read their own, insert their own
 CREATE POLICY "Users can view own game history" ON game_history
   FOR SELECT USING (auth.uid() = user_id);
