@@ -27,8 +27,10 @@ import "react-casino-roulette/dist/index.css";
 // Constants
 // ---------------------------------------------------------------------------
 
+// Standard American roulette red/black assignments
 const RED_NUMBERS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 const BLACK_NUMBERS = new Set([2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]);
+// Green: 0 and 00
 
 const CHIP_VALUES = [100, 500, 1000, 5000] as const;
 type ChipValue = (typeof CHIP_VALUES)[number];
@@ -45,7 +47,7 @@ const TABLE_ROWS: number[][] = [
 ];
 
 type BetType =
-  | { kind: "straight"; number: number }
+  | { kind: "straight"; number: number } // 0 = "0", 37 = "00", 1-36 = numbers
   | { kind: "red" }
   | { kind: "black" }
   | { kind: "odd" }
@@ -54,6 +56,14 @@ type BetType =
   | { kind: "high" }
   | { kind: "dozen"; dozen: 1 | 2 | 3 }
   | { kind: "column"; column: 1 | 2 | 3 };
+
+// We use 37 internally to represent "00"
+const DOUBLE_ZERO = 37;
+
+function displayNumber(n: number): string {
+  if (n === DOUBLE_ZERO) return "00";
+  return String(n);
+}
 
 interface Bet {
   type: BetType;
@@ -76,7 +86,7 @@ function betKey(bt: BetType): string {
 
 function betLabel(bt: BetType): string {
   switch (bt.kind) {
-    case "straight": return `#${bt.number}`;
+    case "straight": return `#${displayNumber(bt.number)}`;
     case "red": return "Red";
     case "black": return "Black";
     case "odd": return "Odd";
@@ -89,27 +99,28 @@ function betLabel(bt: BetType): string {
 }
 
 function getNumberColor(n: number): "red" | "black" | "green" {
-  if (n === 0) return "green";
+  if (n === 0 || n === DOUBLE_ZERO) return "green";
   if (RED_NUMBERS.has(n)) return "red";
   return "black";
 }
 
 function doesBetWin(bt: BetType, result: number): boolean {
+  const isGreen = result === 0 || result === DOUBLE_ZERO;
   switch (bt.kind) {
     case "straight": return bt.number === result;
     case "red": return RED_NUMBERS.has(result);
     case "black": return BLACK_NUMBERS.has(result);
-    case "odd": return result > 0 && result % 2 === 1;
-    case "even": return result > 0 && result % 2 === 0;
+    case "odd": return !isGreen && result % 2 === 1;
+    case "even": return !isGreen && result % 2 === 0;
     case "low": return result >= 1 && result <= 18;
     case "high": return result >= 19 && result <= 36;
     case "dozen":
-      if (result === 0) return false;
+      if (isGreen) return false;
       if (bt.dozen === 1) return result >= 1 && result <= 12;
       if (bt.dozen === 2) return result >= 13 && result <= 24;
       return result >= 25 && result <= 36;
     case "column":
-      if (result === 0) return false;
+      if (isGreen) return false;
       if (bt.column === 1) return COLUMN_1.includes(result);
       if (bt.column === 2) return COLUMN_2.includes(result);
       return COLUMN_3.includes(result);
@@ -233,11 +244,15 @@ export default function RoulettePage() {
     setLastWin(0);
     play("spin");
 
-    const winningNumber = Math.floor(Math.random() * 37);
+    // American roulette: 38 outcomes (0, 00, 1-36)
+    // Random index 0-37: 0 = "0", 37 = "00", 1-36 = numbers
+    const randomIndex = Math.floor(Math.random() * 38);
+    const winningNumber = randomIndex; // 0-36 are themselves, 37 = "00"
     setPendingWinningNumber(winningNumber);
-    setWinningBet(String(winningNumber));
+    // The library expects "0", "00", or "1"-"36" as strings
+    setWinningBet(winningNumber === DOUBLE_ZERO ? "00" : String(winningNumber));
     setStartSpin(true);
-  }, [spinning, bets]);
+  }, [spinning, bets, play]);
 
   const handleSpinEnd = useCallback(() => {
     setStartSpin(false);
@@ -261,7 +276,7 @@ export default function RoulettePage() {
       setMessage(`Winner! +${totalWinnings.toLocaleString()} chips`);
       play(totalWinnings >= 10000 ? "bigWin" : "win");
     } else {
-      setMessage(`No luck. The ball landed on ${winningNumber}.`);
+      setMessage(`No luck. The ball landed on ${displayNumber(winningNumber)}.`);
       play("lose");
     }
 
@@ -331,7 +346,7 @@ export default function RoulettePage() {
                     : "bg-[#1a1a2e] border-gray-500"
                 }`}
               >
-                {result}
+                {displayNumber(result)}
               </div>
               <div>
                 <p className="text-sm text-gray-400 uppercase tracking-wider">
@@ -372,7 +387,7 @@ export default function RoulettePage() {
                     i === 0 ? "ring-2 ring-[var(--gold)] scale-110" : "opacity-60"
                   } transition-all`}
                 >
-                  {n}
+                  {displayNumber(n)}
                 </span>
               ))}
             </div>
@@ -428,11 +443,21 @@ export default function RoulettePage() {
           <div className="min-w-[700px]">
             {/* Zero + Number grid */}
             <div className="flex gap-[2px]">
-              <div className="flex-shrink-0">
+              <div className="flex-shrink-0 grid grid-rows-2 gap-[2px]">
+                <button
+                  onClick={() => placeBet({ kind: "straight", number: DOUBLE_ZERO })}
+                  disabled={spinning}
+                  className="relative w-14 rounded-tl-lg bg-[var(--casino-green)] border border-green-600 hover:brightness-125 transition-all flex items-center justify-center text-white font-black text-xl disabled:cursor-not-allowed"
+                >
+                  00
+                  {getBetAmount({ kind: "straight", number: DOUBLE_ZERO }) > 0 && (
+                    <ChipBadge amount={getBetAmount({ kind: "straight", number: DOUBLE_ZERO })} />
+                  )}
+                </button>
                 <button
                   onClick={() => placeBet({ kind: "straight", number: 0 })}
                   disabled={spinning}
-                  className="relative w-14 h-full min-h-[132px] rounded-l-lg bg-[var(--casino-green)] border border-green-600 hover:brightness-125 transition-all flex items-center justify-center text-white font-black text-2xl disabled:cursor-not-allowed"
+                  className="relative w-14 rounded-bl-lg bg-[var(--casino-green)] border border-green-600 hover:brightness-125 transition-all flex items-center justify-center text-white font-black text-xl disabled:cursor-not-allowed"
                 >
                   0
                   {getBetAmount({ kind: "straight", number: 0 }) > 0 && (
