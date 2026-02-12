@@ -104,6 +104,16 @@ export default function RouletteWheel({
       if (ballSpeed.current >= 0) {
         ballSpeed.current = 0;
         ballStopped.current = true;
+
+        // Snap ball to the exact center of the winning slot so it doesn't
+        // sit on a boundary due to floating-point drift in the physics.
+        // The ball's position relative to the wheel is: ballAngle - wheelAngle.
+        // The slot center (wheel-local) is: slotIdx * SLOT_ANGLE.
+        // So the correct world-space ball angle is: wheelAngle + slotIdx * SLOT_ANGLE.
+        const relAngle = ((ballAngle.current - wheelAngle.current) % 360 + 360) % 360;
+        const nearestSlot = Math.round(relAngle / SLOT_ANGLE) % NUM_SLOTS;
+        ballAngle.current = wheelAngle.current + nearestSlot * SLOT_ANGLE;
+
         if (!spinFired.current) {
           spinFired.current = true;
           // Let the player see where it landed for 600 ms
