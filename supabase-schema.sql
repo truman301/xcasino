@@ -110,7 +110,12 @@ CREATE POLICY "Only admins can update settings" ON settings
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
   );
 
--- 9. Insert default settings
+-- 9. Cosmetics columns on profiles
+-- Run this migration if profiles table already exists:
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS owned_cosmetics JSONB NOT NULL DEFAULT '[]';
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS equipped_cosmetics JSONB NOT NULL DEFAULT '{}';
+
+-- 10. Insert default settings
 INSERT INTO settings (key, value) VALUES
   ('house_edge', '{"slots": 5, "dice": 1, "crash": 3, "roulette": 2.7, "poker": 0, "blackjack": 1}'::jsonb),
   ('min_bet', '100'::jsonb),

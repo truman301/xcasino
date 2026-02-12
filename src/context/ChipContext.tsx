@@ -21,6 +21,8 @@ interface Profile {
   username: string;
   chips: number;
   is_admin: boolean;
+  owned_cosmetics: string[];
+  equipped_cosmetics: Record<string, string | null>;
 }
 
 interface ChipContextType {
@@ -43,6 +45,14 @@ interface ChipContextType {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 
+  // Cosmetics
+  ownedCosmetics: string[];
+  equippedCosmetics: Record<string, string | null>;
+  purchaseCosmetic: (itemId: string, price: number) => boolean;
+  equipCosmetic: (category: string, itemId: string | null) => void;
+  ownsCosmetic: (itemId: string) => boolean;
+  getEquippedItem: (category: string) => string | null;
+
   // Legacy compat
   login: (name: string) => void;
   logout: () => void;
@@ -61,6 +71,10 @@ export function ChipProvider({ children }: { children: ReactNode }) {
   const [chips, setChips] = useState(10000);
   const [loading, setLoading] = useState(true);
 
+  // Cosmetics state
+  const [ownedCosmetics, setOwnedCosmetics] = useState<string[]>([]);
+  const [equippedCosmetics, setEquippedCosmetics] = useState<Record<string, string | null>>({});
+
   // Legacy state for non-Supabase mode
   const [legacyUsername, setLegacyUsername] = useState("Guest");
   const [legacyLoggedIn, setLegacyLoggedIn] = useState(false);
@@ -69,6 +83,9 @@ export function ChipProvider({ children }: { children: ReactNode }) {
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chipsRef = useRef(chips);
   chipsRef.current = chips;
+
+  // Debounced cosmetics sync
+  const cosmeticsSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ------------------------------------------------------------------
   // Load profile from Supabase
@@ -94,8 +111,12 @@ export function ChipProvider({ children }: { children: ReactNode }) {
           username: data.username as string,
           chips: data.chips as number,
           is_admin: data.is_admin as boolean,
+          owned_cosmetics: (data.owned_cosmetics as string[]) ?? [],
+          equipped_cosmetics: (data.equipped_cosmetics as Record<string, string | null>) ?? {},
         });
         setChips(data.chips as number);
+        setOwnedCosmetics((data.owned_cosmetics as string[]) ?? []);
+        setEquippedCosmetics((data.equipped_cosmetics as Record<string, string | null>) ?? {});
       }
     } catch (err) {
       console.error("Failed to load profile:", err);
@@ -125,12 +146,45 @@ export function ChipProvider({ children }: { children: ReactNode }) {
   );
 
   // ------------------------------------------------------------------
+  // Debounced cosmetics save to database
+  // ------------------------------------------------------------------
+
+  const syncCosmeticsToDb = useCallback(
+    (owned: string[], equipped: Record<string, string | null>) => {
+      if (!isSupabaseConfigured || !user) return;
+      if (cosmeticsSyncRef.current) clearTimeout(cosmeticsSyncRef.current);
+      cosmeticsSyncRef.current = setTimeout(async () => {
+        try {
+          await supabase
+            .from("profiles")
+            .update({
+              owned_cosmetics: owned,
+              equipped_cosmetics: equipped,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", user.id);
+        } catch (err) {
+          console.error("Failed to sync cosmetics:", err);
+        }
+      }, 1000);
+    },
+    [user]
+  );
+
+  // ------------------------------------------------------------------
   // Auth state listener
   // ------------------------------------------------------------------
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setLoading(false);
+      // Load cosmetics from localStorage
+      try {
+        const savedOwned = localStorage.getItem("xcasino_cosmetics_owned");
+        const savedEquipped = localStorage.getItem("xcasino_cosmetics_equipped");
+        if (savedOwned) setOwnedCosmetics(JSON.parse(savedOwned));
+        if (savedEquipped) setEquippedCosmetics(JSON.parse(savedEquipped));
+      } catch {}
       return;
     }
 
@@ -155,6 +209,8 @@ export function ChipProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
         setChips(10000);
+        setOwnedCosmetics([]);
+        setEquippedCosmetics({});
       }
     });
 
@@ -251,7 +307,64 @@ export function ChipProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setChips(10000);
+    setOwnedCosmetics([]);
+    setEquippedCosmetics({});
   }, [user]);
+
+  // ------------------------------------------------------------------
+  // Cosmetic actions
+  // ------------------------------------------------------------------
+
+  const purchaseCosmetic = useCallback(
+    (itemId: string, price: number): boolean => {
+      if (ownedCosmetics.includes(itemId)) return false;
+      if (chipsRef.current < price) return false;
+      setChips((prev) => {
+        if (prev >= price) {
+          const next = prev - price;
+          syncChipsToDb(next);
+          return next;
+        }
+        return prev;
+      });
+      const newOwned = [...ownedCosmetics, itemId];
+      setOwnedCosmetics(newOwned);
+      syncCosmeticsToDb(newOwned, equippedCosmetics);
+      // Also persist to localStorage for non-Supabase mode
+      if (!isSupabaseConfigured) {
+        try {
+          localStorage.setItem("xcasino_cosmetics_owned", JSON.stringify(newOwned));
+        } catch {}
+      }
+      return true;
+    },
+    [ownedCosmetics, equippedCosmetics, syncChipsToDb, syncCosmeticsToDb]
+  );
+
+  const equipCosmetic = useCallback(
+    (category: string, itemId: string | null) => {
+      if (itemId && !ownedCosmetics.includes(itemId)) return;
+      const newEquipped = { ...equippedCosmetics, [category]: itemId };
+      setEquippedCosmetics(newEquipped);
+      syncCosmeticsToDb(ownedCosmetics, newEquipped);
+      if (!isSupabaseConfigured) {
+        try {
+          localStorage.setItem("xcasino_cosmetics_equipped", JSON.stringify(newEquipped));
+        } catch {}
+      }
+    },
+    [ownedCosmetics, equippedCosmetics, syncCosmeticsToDb]
+  );
+
+  const ownsCosmetic = useCallback(
+    (itemId: string) => ownedCosmetics.includes(itemId),
+    [ownedCosmetics]
+  );
+
+  const getEquippedItem = useCallback(
+    (category: string) => equippedCosmetics[category] ?? null,
+    [equippedCosmetics]
+  );
 
   // ------------------------------------------------------------------
   // Legacy compat
@@ -300,6 +413,12 @@ export function ChipProvider({ children }: { children: ReactNode }) {
         signUp,
         signIn,
         signOut,
+        ownedCosmetics,
+        equippedCosmetics,
+        purchaseCosmetic,
+        equipCosmetic,
+        ownsCosmetic,
+        getEquippedItem,
         login,
         logout,
         setUsername: setUsernameCompat,

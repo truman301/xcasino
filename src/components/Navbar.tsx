@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useChips } from "@/context/ChipContext";
 import { useState } from "react";
+import PlayerBadge from "./PlayerBadge";
 
 export default function Navbar() {
   const {
     chips, username, isLoggedIn, isAdmin, loading,
-    signIn, signUp, signOut, login, supabaseReady,
+    signIn, signUp, signOut, login, supabaseReady, equippedCosmetics,
   } = useChips();
 
   const [showAuth, setShowAuth] = useState(false);
@@ -163,7 +164,13 @@ export default function Navbar() {
               <div className="w-16 h-8 rounded-lg bg-[var(--casino-card)] animate-pulse" />
             ) : isLoggedIn ? (
               <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-400">{username}</span>
+                <PlayerBadge
+                  username={username}
+                  equippedCosmetics={equippedCosmetics ?? {}}
+                  size="md"
+                  showTitle={true}
+                  showFrame={true}
+                />
                 <button
                   onClick={() => signOut()}
                   className="text-xs text-gray-600 hover:text-red-400 transition-colors"
