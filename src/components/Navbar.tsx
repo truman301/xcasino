@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useChips } from "@/context/ChipContext";
 import { useState } from "react";
 import PlayerBadge from "./PlayerBadge";
-import ProfilePopup from "./ProfilePopup";
 
 export default function Navbar() {
   const {
@@ -12,7 +11,6 @@ export default function Navbar() {
     signIn, signUp, signOut, login, supabaseReady, equippedCosmetics,
   } = useChips();
 
-  const [showProfile, setShowProfile] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -166,9 +164,9 @@ export default function Navbar() {
               <div className="w-16 h-8 rounded-lg bg-[var(--casino-card)] animate-pulse" />
             ) : isLoggedIn ? (
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowProfile(true)}
-                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                <Link
+                  href="/profile"
+                  className="hover:opacity-80 transition-opacity"
                   title="View profile"
                 >
                   <PlayerBadge
@@ -178,7 +176,7 @@ export default function Navbar() {
                     showTitle={true}
                     showFrame={true}
                   />
-                </button>
+                </Link>
                 <button
                   onClick={() => signOut()}
                   className="text-xs text-gray-600 hover:text-red-400 transition-colors"
@@ -380,12 +378,6 @@ export default function Navbar() {
         </div>
       )}
 
-      {isLoggedIn && (
-        <ProfilePopup
-          isOpen={showProfile}
-          onClose={() => setShowProfile(false)}
-        />
-      )}
     </>
   );
 }
