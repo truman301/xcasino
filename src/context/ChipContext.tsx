@@ -180,17 +180,17 @@ export function ChipProvider({ children }: { children: ReactNode }) {
 
   const removeChips = useCallback(
     (amount: number): boolean => {
-      let success = false;
+      // Read current chips synchronously from ref to avoid race condition
+      if (chipsRef.current < amount) return false;
       setChips((prev) => {
         if (prev >= amount) {
-          success = true;
           const next = prev - amount;
           syncChipsToDb(next);
           return next;
         }
         return prev;
       });
-      return success;
+      return true;
     },
     [syncChipsToDb]
   );
