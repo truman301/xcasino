@@ -66,6 +66,18 @@ const games = [
     hot: false,
   },
   {
+    name: "Craps",
+    href: "/craps",
+    icon: "🎲",
+    description: "Roll the dice! Pass line, field bets, and more.",
+    accent: "from-[#0a0f1a] to-[#0f0f18]",
+    border: "border-blue-900/30",
+    hoverBorder: "hover:border-[var(--gold)]/50",
+    iconColor: "text-blue-400",
+    players: "Solo",
+    hot: false,
+  },
+  {
     name: "Crash",
     href: "/crash",
     icon: "📈",

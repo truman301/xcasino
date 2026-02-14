@@ -119,6 +119,7 @@ export default function Navbar() {
                 { href: "/roulette", label: "Roulette" },
                 { href: "/slots", label: "Slots" },
                 { href: "/dice", label: "Dice" },
+                { href: "/craps", label: "Craps" },
                 { href: "/crash", label: "Crash" },
               ].map((link) => (
                 <Link
